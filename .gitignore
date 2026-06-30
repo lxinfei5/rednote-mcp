@@ -36,6 +36,9 @@ go.work.sum
 
 # Build artifacts
 xiaohongshu-mcp
+xiaohongshu-mcp-darwin-*
+xiaohongshu-login-darwin-*
+*.bak
 
 # Test scripts
 test_*.sh
