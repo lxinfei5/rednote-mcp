@@ -430,7 +430,7 @@ Docker 版本会自动：
 - 配置 CloakBrowser Chromium 和中文字体
 - 挂载 `./data` 用于存储 cookies 和运行数据目录
 - 挂载 `./images` 用于存储发布的图片
-- 暴露 18060 端口供 MCP 连接
+- 暴露 18060 端口供 MCP 连接（docker-compose 默认仅映射到宿主机回环 `127.0.0.1`，避免暴露到局域网；如需跨机访问自行放开端口映射）
 
 详细使用说明请参考：[Docker 部署指南](./docker/README.md)
 
