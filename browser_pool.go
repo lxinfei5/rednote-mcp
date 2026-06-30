@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-rod/rod"
 	"github.com/sirupsen/logrus"
-	"github.com/xpzouying/headless_browser"
+	"github.com/xpzouying/xiaohongshu-mcp/browser"
 	"github.com/xpzouying/xiaohongshu-mcp/configs"
 )
 
@@ -22,12 +22,12 @@ import (
 // 对单 agent 串行调用无影响。
 var (
 	poolMu     sync.Mutex
-	sharedConn *headless_browser.Browser
+	sharedConn *browser.Browser
 )
 
 // getBrowserLocked 返回常驻 browser 单例，必要时懒加载启动。
 // 调用约定：调用方必须已持有 poolMu。返回的 browser 健康性由调用方探活。
-func getBrowserLocked() *headless_browser.Browser {
+func getBrowserLocked() *browser.Browser {
 	if sharedConn != nil {
 		return sharedConn
 	}
@@ -39,9 +39,9 @@ func getBrowserLocked() *headless_browser.Browser {
 }
 
 // healthCheckLocked 确认 browser 底层连接存活：开一个 page 再关掉。
-// headless_browser 不导出内部 *rod.Browser，只能间接探活。
+// browser 封装不导出内部 *rod.Browser，只能间接探活。
 // 若连接已断，NewPage 会 panic；用 recover 兜底转成 error。
-func healthCheckLocked(b *headless_browser.Browser) (err error) {
+func healthCheckLocked(b *browser.Browser) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("browser 健康检查失败: %v", r)
