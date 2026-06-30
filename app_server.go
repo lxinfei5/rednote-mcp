@@ -67,5 +67,8 @@ func (s *AppServer) Start(port string) error {
 		logrus.Infof("服务器已优雅关闭")
 	}
 
+	// 关闭常驻浏览器实例，避免遗留僵尸 Chrome 进程。
+	closeSharedBrowser()
+
 	return nil
 }
