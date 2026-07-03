@@ -119,51 +119,56 @@ func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatus
 	return response, nil
 }
 
-// GetLoginQrcode 获取登录的扫码二维码
+// GetLoginQrcode 获取登录的扫码二维码。
+// 在常驻浏览器中打开一个登录 tab，避免另起第二个 Chrome 争用同一 profile。
 func (s *XiaohongshuService) GetLoginQrcode(ctx context.Context) (*LoginQrcodeResponse, error) {
-	b := newBrowser()
-	page := b.NewPage()
-
-	deferFunc := func() {
-		_ = page.Close()
-		b.Close()
-	}
-
-	loginAction := xiaohongshu.NewLogin(page)
-
-	img, loggedIn, err := loginAction.FetchQrcodeImage(ctx)
-	if err != nil || loggedIn {
-		defer deferFunc()
-	}
+	page, err := newSharedBrowserPage()
 	if err != nil {
 		return nil, err
 	}
 
-	timeout := 4 * time.Minute
+	// 未移交给后台等待 goroutine 前，任何返回/panic 路径都关闭该 tab，避免泄漏。
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			_ = page.Close()
+		}
+	}()
 
-	if !loggedIn {
-		go func() {
-			ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
-			defer cancel()
-			defer deferFunc()
+	loginAction := xiaohongshu.NewLogin(page)
 
-			if loginAction.WaitForLogin(ctxTimeout) {
-				if er := saveCookies(page); er != nil {
-					logrus.Errorf("failed to save cookies: %v", er)
-				}
-			}
-		}()
+	img, loggedIn, err := loginAction.FetchQrcodeImage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if loggedIn {
+		return &LoginQrcodeResponse{Timeout: "0s", IsLoggedIn: true}, nil
 	}
 
-	return &LoginQrcodeResponse{
-		Timeout: func() string {
-			if loggedIn {
-				return "0s"
+	timeout := 4 * time.Minute
+	handedOff = true
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				logrus.Warnf("等待扫码登录时出错: %v", r)
 			}
-			return timeout.String()
-		}(),
+			_ = page.Close()
+		}()
+
+		ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
+		defer cancel()
+
+		if loginAction.WaitForLogin(ctxTimeout) {
+			if er := saveCookies(page); er != nil {
+				logrus.Errorf("failed to save cookies: %v", er)
+			}
+		}
+	}()
+
+	return &LoginQrcodeResponse{
+		Timeout:    timeout.String(),
 		Img:        img,
-		IsLoggedIn: loggedIn,
+		IsLoggedIn: false,
 	}, nil
 }
 

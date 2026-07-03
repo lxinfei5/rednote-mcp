@@ -87,6 +87,30 @@ func closeSharedBrowser() {
 	closeSharedBrowserLocked()
 }
 
+// newSharedBrowserPage 在常驻 browser 上打开一个由调用方管理生命周期的 page，
+// 用于需要长时间保留页面的流程（如扫码登录等待）。复用常驻 Chrome，不再另起
+// 第二个进程争用同一 profile（Chrome 单例锁会导致第二实例启动失败）。
+// 调用方负责在用完后 page.Close()。
+func newSharedBrowserPage() (page *rod.Page, err error) {
+	poolMu.Lock()
+	defer poolMu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("打开浏览器页面失败: %v", r)
+			page = nil
+		}
+	}()
+
+	b := getBrowserLocked()
+	if e := healthCheckLocked(b); e != nil {
+		logrus.Warnf("常驻浏览器不可用，尝试重建: %v", e)
+		closeSharedBrowserLocked()
+		b = getBrowserLocked()
+	}
+	page = b.NewPage()
+	return page, nil
+}
+
 // WarmupSharedBrowser 预启动常驻浏览器实例并自动打开小红书首页。
 // 有头模式下，启动后自动导航到小红书登录页，方便用户扫码登录；
 // 无头模式下不自动打开页面，仅做健康检查。
