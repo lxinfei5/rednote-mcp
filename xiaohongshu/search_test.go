@@ -37,7 +37,9 @@ func TestSearch(t *testing.T) {
 
 func TestSearchWithFilters(t *testing.T) {
 
-	//t.Skip("SKIP: 测试筛选功能")
+	// 需要真实浏览器登录与网络，默认跳过（与同包其它集成用例一致），
+	// 手动联调时注释掉本行执行。
+	t.Skip("SKIP: 需要真实浏览器登录的集成测试")
 
 	b := browser.NewBrowser(false)
 	defer b.Close()
