@@ -92,40 +92,55 @@ func closeSharedBrowser() {
 // 无头模式下不自动打开页面，仅做健康检查。
 func WarmupSharedBrowser() {
 	go func() {
-		poolMu.Lock()
-		if sharedConn != nil {
-			poolMu.Unlock()
+		wp := warmupBrowserLocked()
+		if wp == nil {
 			return
 		}
 
-		logrus.Infof("预热常驻浏览器实例 (headless=%v)...", configs.IsHeadless())
-		b := getBrowserLocked()
-		if err := healthCheckLocked(b); err != nil {
-			logrus.Warnf("浏览器预热探活失败: %v，将在首次使用时重建", err)
-			closeSharedBrowserLocked()
-			poolMu.Unlock()
-			return
-		}
-
-		if !configs.IsHeadless() {
-			wp := b.NewPage()
-			warmupPage = wp
-			poolMu.Unlock()
-
-			logrus.Infof("自动打开小红书首页，请扫码登录...")
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						logrus.Warnf("自动打开小红书页面时出错（不影响使用）: %v", r)
-					}
-				}()
-				wp.Timeout(15 * time.Second).MustNavigate("https://www.xiaohongshu.com/explore")
-				logrus.Infof("小红书首页已打开，请在浏览器窗口中扫码登录")
-			}()
-			return
-		}
-
-		poolMu.Unlock()
-		logrus.Infof("常驻浏览器实例预热完成")
+		// 导航在锁外进行，避免长时间持锁；使用局部 page 句柄，失败（含被并发关闭）
+		// 时 recover 兜底，不影响后续使用。
+		defer func() {
+			if r := recover(); r != nil {
+				logrus.Warnf("自动打开小红书页面时出错（不影响使用）: %v", r)
+			}
+		}()
+		logrus.Infof("自动打开小红书首页，请扫码登录...")
+		wp.Timeout(15 * time.Second).MustNavigate("https://www.xiaohongshu.com/explore")
+		logrus.Infof("小红书首页已打开，请在浏览器窗口中扫码登录")
 	}()
+}
+
+// warmupBrowserLocked 在持锁下预热常驻浏览器：有头模式返回待导航的 warmupPage，否则 nil。
+// 任何 panic（Chrome 启动失败、profile 被占用等）都被 recover 并降级为 warn，
+// 不会让后台 goroutine 崩溃整个进程；锁通过 defer 保证释放。
+func warmupBrowserLocked() (wp *rod.Page) {
+	poolMu.Lock()
+	defer poolMu.Unlock()
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Warnf("浏览器预热失败: %v，将在首次使用时重建", r)
+			closeSharedBrowserLocked()
+			wp = nil
+		}
+	}()
+
+	if sharedConn != nil {
+		return nil
+	}
+
+	logrus.Infof("预热常驻浏览器实例 (headless=%v)...", configs.IsHeadless())
+	b := getBrowserLocked()
+	if err := healthCheckLocked(b); err != nil {
+		logrus.Warnf("浏览器预热探活失败: %v，将在首次使用时重建", err)
+		closeSharedBrowserLocked()
+		return nil
+	}
+
+	if !configs.IsHeadless() {
+		warmupPage = b.NewPage()
+		return warmupPage
+	}
+
+	logrus.Infof("常驻浏览器实例预热完成")
+	return nil
 }
