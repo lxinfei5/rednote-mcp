@@ -63,22 +63,34 @@ func withSharedPage(fn func(page *rod.Page) error) error {
 	}
 	defer func() { lastPageOp = time.Now() }()
 
-	b := getBrowserLocked()
-
-	if err := healthCheckLocked(b); err != nil {
-		logrus.Warnf("常驻浏览器不可用，尝试重建: %v", err)
+	// 直接开正式 page 并对失败自愈，省去每次操作额外开/关一个探活 page 的开销。
+	page, err := openPageLocked()
+	if err != nil {
+		logrus.Warnf("打开页面失败，尝试重建常驻浏览器: %v", err)
 		closeSharedBrowserLocked()
-		b = getBrowserLocked()
-		if err := healthCheckLocked(b); err != nil {
+		page, err = openPageLocked()
+		if err != nil {
 			closeSharedBrowserLocked()
 			return err
 		}
 	}
-
-	page := b.NewPage()
 	defer page.Close()
 
 	return fn(page)
+}
+
+// openPageLocked 在常驻 browser 上开一个 page；连接已断时 NewPage 会 panic，
+// 用 recover 转成 error 交由调用方重建。调用方必须已持有 poolMu。
+func openPageLocked() (page *rod.Page, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("打开页面失败: %v", r)
+			page = nil
+		}
+	}()
+	b := getBrowserLocked()
+	page = b.NewPage()
+	return page, nil
 }
 
 func closeSharedBrowser() {
