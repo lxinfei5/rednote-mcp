@@ -133,7 +133,8 @@ func (a *LikeAction) toggleLike(page *rod.Page, feedID string, targetLiked bool,
 		return nil
 	}
 
-	return nil
+	// 两次点击后状态确认仍未达目标态，如实返回失败而非谎报成功
+	return fmt.Errorf("feed %s %s失败：两次点击后状态未变为目标态", feedID, actionType)
 }
 
 // FavoriteAction 负责处理收藏相关交互
@@ -209,7 +210,8 @@ func (a *FavoriteAction) toggleFavorite(page *rod.Page, feedID string, targetCol
 		return nil
 	}
 
-	return nil
+	// 两次点击后状态确认仍未达目标态，如实返回失败而非谎报成功
+	return fmt.Errorf("feed %s %s失败：两次点击后状态未变为目标态", feedID, actionType)
 }
 
 // getInteractState 从 __INITIAL_STATE__ 读取笔记的点赞/收藏状态
