@@ -60,7 +60,8 @@ func (f *CommentFeedAction) PostComment(ctx context.Context, feedID, xsecToken, 
 		return fmt.Errorf("无法输入评论内容: %w", err)
 	}
 
-	time.Sleep(1 * time.Second)
+	// 提交前加入随机停顿，模拟真人斟酌，避免固定 1s 节奏
+	sleepRandom(800, 1800)
 
 	submitButton, err := page.Element("div.bottom button.submit")
 	if err != nil {
@@ -136,7 +137,8 @@ func (f *CommentFeedAction) ReplyToComment(ctx context.Context, feedID, xsecToke
 		return fmt.Errorf("输入回复内容失败: %w", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	// 提交前加入随机停顿，模拟真人斟酌
+	sleepRandom(700, 1600)
 
 	// 查找并点击提交按钮
 	submitBtn, err := page.Element("div.bottom button.submit")

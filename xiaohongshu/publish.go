@@ -651,13 +651,14 @@ func inputTag(contentElem *rod.Element, tag string) error {
 	if err := contentElem.Input("#"); err != nil {
 		return errors.Wrap(err, "输入#失败")
 	}
-	time.Sleep(200 * time.Millisecond)
+	sleepRandom(150, 350)
 
 	for _, char := range tag {
 		if err := contentElem.Input(string(char)); err != nil {
 			return errors.Wrapf(err, "输入字符[%c]失败", char)
 		}
-		time.Sleep(50 * time.Millisecond)
+		// 逐字符输入间隔加抖动，避免固定 50ms 的机械节奏
+		sleepRandom(60, 180)
 	}
 
 	time.Sleep(1 * time.Second)
