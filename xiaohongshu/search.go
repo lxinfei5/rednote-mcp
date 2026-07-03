@@ -172,7 +172,9 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 	page.MustNavigate(searchURL)
 	page.MustWaitStable()
 
-	page.MustWait(`() => window.__INITIAL_STATE__ !== undefined`)
+	page.MustWait(`() => window.__INITIAL_STATE__ &&
+		window.__INITIAL_STATE__.search &&
+		window.__INITIAL_STATE__.search.feeds !== undefined`)
 
 	// 如果有筛选条件，则应用筛选
 	if len(filters) > 0 {
@@ -211,7 +213,9 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 		// 等待页面更新
 		page.MustWaitStable()
 		// 重新等待 __INITIAL_STATE__ 更新
-		page.MustWait(`() => window.__INITIAL_STATE__ !== undefined`)
+		page.MustWait(`() => window.__INITIAL_STATE__ &&
+		window.__INITIAL_STATE__.search &&
+		window.__INITIAL_STATE__.search.feeds !== undefined`)
 	}
 
 	result := page.MustEval(`() => {

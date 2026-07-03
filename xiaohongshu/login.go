@@ -26,7 +26,9 @@ func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 
 	exists, _, err := pp.Has(".main-container .user .link-wrapper .channel")
 	if err != nil {
-		return false, nil
+		// 查询出错是真实异常（元素找不到时 Has 返回 false 而非 error），
+		// 如实上报而不是当作"未登录"吞掉。
+		return false, err
 	}
 
 	return exists, nil
