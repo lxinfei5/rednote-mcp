@@ -39,8 +39,9 @@ func (c *localCookie) LoadCookies() ([]byte, error) {
 }
 
 // SaveCookies 保存 cookies 到文件中。
+// cookies 含小红书登录态（等价账号凭证），用 0600 仅属主可读，避免同机他用户窃取。
 func (c *localCookie) SaveCookies(data []byte) error {
-	return os.WriteFile(c.path, data, 0644)
+	return os.WriteFile(c.path, data, 0600)
 }
 
 // DeleteCookies 删除 cookies 文件。

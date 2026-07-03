@@ -80,7 +80,8 @@ func NewBrowser(headless bool, options ...Option) *Browser {
 	}
 
 	if cfg.userDataDir != "" {
-		if err := os.MkdirAll(cfg.userDataDir, 0755); err != nil {
+		// profile 目录含完整登录态，用 0700 仅属主可访问
+		if err := os.MkdirAll(cfg.userDataDir, 0700); err != nil {
 			logrus.Warnf("failed to create user data dir %s: %v", cfg.userDataDir, err)
 		} else {
 			l = l.Set("user-data-dir", cfg.userDataDir)
