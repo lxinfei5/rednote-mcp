@@ -18,7 +18,7 @@ func setupRoutes(appServer *AppServer) *gin.Engine {
 
 	// 添加中间件
 	router.Use(errorHandlingMiddleware())
-	router.Use(corsMiddleware())
+	router.Use(securityMiddleware())
 
 	// 健康检查
 	router.GET("/health", healthHandler)
