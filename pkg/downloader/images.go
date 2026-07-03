@@ -50,6 +50,9 @@ func isBlockedIP(ip net.IP) bool {
 		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast()
 }
 
+// ipBlocked 是实际生效的拦截判断，默认为 isBlockedIP；单测可覆盖以放行回环 httptest。
+var ipBlocked = isBlockedIP
+
 // safeDialContext 解析目标域名，若任一解析 IP 命中内部网段则拒绝连接；
 // 直接拨号已校验的 IP，避免解析-连接之间的 DNS rebinding。
 func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -63,7 +66,7 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 		return nil, err
 	}
 	for _, ip := range ips {
-		if isBlockedIP(ip.IP) {
+		if ipBlocked(ip.IP) {
 			return nil, fmt.Errorf("拒绝连接内部地址: %s", ip.IP)
 		}
 	}

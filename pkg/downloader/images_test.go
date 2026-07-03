@@ -3,6 +3,7 @@ package downloader
 import (
 	"encoding/base64"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -114,6 +115,11 @@ func TestDownloadImage_AntiHotlink(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解析测试图片失败: %v", err)
 	}
+
+	// httptest 监听回环地址，会被 SSRF 拦截；本用例测的是下载逻辑，临时放行。
+	oldBlocked := ipBlocked
+	ipBlocked = func(net.IP) bool { return false }
+	defer func() { ipBlocked = oldBlocked }()
 
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
