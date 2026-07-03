@@ -19,7 +19,7 @@ import (
 
 // ========== 配置常量 ==========
 const (
-	defaultMaxAttempts     = 500
+	defaultMaxAttempts     = 200
 	stagnantLimit          = 20
 	minScrollDelta         = 10
 	maxClickPerRound       = 3
@@ -77,7 +77,7 @@ func (f *FeedDetailAction) GetFeedDetail(ctx context.Context, feedID, xsecToken 
 }
 
 func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
-	page := f.page.Context(ctx).Timeout(10 * time.Minute)
+	page := f.page.Context(ctx).Timeout(5 * time.Minute)
 	url := makeFeedDetailURL(feedID, xsecToken)
 
 	logrus.Infof("打开 feed 详情页: %s", url)
