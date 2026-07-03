@@ -1,9 +1,11 @@
 package downloader
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -32,8 +34,42 @@ func NewImageDownloader(savePath string) *ImageDownloader {
 		savePath: savePath,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
+			// 自定义 DialContext 拦截指向私网/环回/链路本地地址的连接，
+			// 防止通过图片 URL 或重定向发起 SSRF（含云元数据 169.254.169.254）。
+			Transport: &http.Transport{
+				DialContext:         safeDialContext,
+				TLSHandshakeTimeout: 10 * time.Second,
+			},
 		},
 	}
+}
+
+// isBlockedIP 判断 IP 是否属于不允许外发请求的内部网段。
+func isBlockedIP(ip net.IP) bool {
+	return ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsMulticast()
+}
+
+// safeDialContext 解析目标域名，若任一解析 IP 命中内部网段则拒绝连接；
+// 直接拨号已校验的 IP，避免解析-连接之间的 DNS rebinding。
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if isBlockedIP(ip.IP) {
+			return nil, fmt.Errorf("拒绝连接内部地址: %s", ip.IP)
+		}
+	}
+
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	return d.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
 }
 
 // DownloadImage 下载图片

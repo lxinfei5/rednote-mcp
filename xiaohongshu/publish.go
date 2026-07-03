@@ -12,6 +12,7 @@ import (
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
+	"github.com/h2non/filetype"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -205,6 +206,11 @@ func uploadImages(page *rod.Page, imagesPaths []string) error {
 			logrus.Warnf("图片文件不存在: %s", path)
 			continue
 		}
+		// 上传前校验确为图片，避免把任意本地文件（如密钥/配置）提交到小红书
+		if !isImageFile(path) {
+			logrus.Warnf("跳过非图片文件: %s", path)
+			continue
+		}
 		validPaths = append(validPaths, path)
 		logrus.Infof("获取有效图片：%s", path)
 	}
@@ -234,6 +240,19 @@ func uploadImages(page *rod.Page, imagesPaths []string) error {
 	}
 
 	return nil
+}
+
+// isImageFile 通过文件头判断是否为图片，仅读取头部字节，避免加载大文件。
+func isImageFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	head := make([]byte, 262) // filetype 仅需文件头即可识别类型
+	n, _ := f.Read(head)
+	return filetype.IsImage(head[:n])
 }
 
 // waitForUploadComplete 等待第 expectedCount 张图片上传完成，最多等 60 秒
