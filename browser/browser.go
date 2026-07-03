@@ -70,7 +70,9 @@ func NewBrowser(headless bool, options ...Option) *Browser {
 		Delete("enable-features").
 		Delete("no-startup-window").
 		Set("no-first-run", "true").
-		Set("no-default-browser-check", "true")
+		Set("no-default-browser-check", "true").
+		// 从 Blink 层关闭自动化特征，navigator.webdriver 原生保持 false，无需依赖注入
+		Set("disable-blink-features", "AutomationControlled")
 
 	if cfg.binPath != "" {
 		l = l.Bin(cfg.binPath)
