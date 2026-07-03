@@ -220,13 +220,12 @@ func findCommentElement(page *rod.Page, commentID, userID string) (*rod.Element,
 			time.Sleep(300 * time.Millisecond)
 		}
 
-		// === 5. 继续向下滚动（go-rod 原生滚轮，isTrusted=true）===
+		// === 5. 继续向下滚动 ===
 		logrus.Infof("继续向下滚动...")
-		vh := 800
-		if r, err := page.Eval(`() => window.innerHeight`); err == nil {
-			vh = r.Value.Int()
+		_, err := page.Eval(`() => { window.scrollBy(0, window.innerHeight * 0.8); return true; }`)
+		if err != nil {
+			logrus.Warnf("滚动失败: %v", err)
 		}
-		mouseScrollBy(page, float64(vh)*0.8)
 		time.Sleep(500 * time.Millisecond)
 
 		// === 6. 滚动后立即查找（边滚动边查找）===

@@ -479,7 +479,7 @@ func humanScroll(page *rod.Page, speed string, largeMode bool, pushCount int) (b
 
 	for i := 0; i < max(1, pushCount); i++ {
 		scrollDelta := calculateScrollDelta(viewportHeight, baseRatio)
-		mouseScrollBy(page, scrollDelta)
+		page.MustEval(`(delta) => { window.scrollBy(0, delta); }`, scrollDelta)
 
 		sleepRandom(scrollWaitRange.min, scrollWaitRange.max)
 
@@ -499,8 +499,7 @@ func humanScroll(page *rod.Page, speed string, largeMode bool, pushCount int) (b
 	}
 
 	if !scrolled && pushCount > 0 {
-		// 兜底：一次较大幅度的原生滚轮，尽量滑到底部
-		mouseScrollBy(page, float64(viewportHeight)*3)
+		page.MustEval(`() => window.scrollTo(0, document.body.scrollHeight)`)
 		sleepRandom(postScrollRange.min, postScrollRange.max)
 		currentScrollTop = getScrollTop(page)
 		actualDelta = currentScrollTop - beforeTop + actualDelta
@@ -548,27 +547,24 @@ func scrollToCommentsArea(page *rod.Page) {
 	smartScroll(page, 100)
 }
 
-// mouseScrollBy 用 go-rod 原生鼠标滚轮下滚 deltaY 像素。相比 JS 合成的 WheelEvent
-// （isTrusted=false，是明显的自动化特征），CDP 注入的滚轮事件 isTrusted=true。
-// 滚动前把鼠标移到视口中部，确保作用于内容/评论滚动容器并触发懒加载。
-// 全程不使用 Must*，读取失败时用默认视口尺寸兜底，不会 panic。
-func mouseScrollBy(page *rod.Page, deltaY float64) {
-	w, h := 1280, 800
-	if r, err := page.Eval(`() => window.innerWidth`); err == nil {
-		w = r.Value.Int()
-	}
-	if r, err := page.Eval(`() => window.innerHeight`); err == nil {
-		h = r.Value.Int()
-	}
-	_ = page.Mouse.MoveTo(proto.Point{X: float64(w) / 2, Y: float64(h) / 2})
-	if err := page.Mouse.Scroll(0, deltaY, 1); err != nil {
-		logrus.Debugf("鼠标滚动失败: %v", err)
-	}
-}
-
-// smartScroll 用原生鼠标滚轮触发一次小幅滚动，激活评论区懒加载。
+// smartScroll 智能滚动：向评论滚动容器派发 wheel 事件以触发懒加载。
+// 注：实测原生 Mouse.Scroll（鼠标锚点）在 PC 详情页评论加载上不如直接向目标容器
+// 派发 wheel 稳定（会漏加载），故保留合成 wheel；其 isTrusted=false 属低风险信号。
 func smartScroll(page *rod.Page, delta float64) {
-	mouseScrollBy(page, delta)
+	page.MustEval(`(delta) => {
+		let targetElement = document.querySelector('.note-scroller')
+			|| document.querySelector('.interaction-container')
+			|| document.documentElement;
+
+		const wheelEvent = new WheelEvent('wheel', {
+			deltaY: delta,
+			deltaMode: 0,
+			bubbles: true,
+			cancelable: true,
+			view: window
+		});
+		targetElement.dispatchEvent(wheelEvent);
+	}`, delta)
 }
 
 func scrollToLastComment(page *rod.Page) {
