@@ -185,21 +185,16 @@ func getTabElement(page *rod.Page, tabname string) (*rod.Element, bool, error) {
 }
 
 func isElementBlocked(elem *rod.Element) (bool, error) {
-	result, err := elem.Eval(`() => {
-		const rect = this.getBoundingClientRect();
-		if (rect.width === 0 || rect.height === 0) {
-			return true;
+	// 用 go-rod 原生可交互性判断替代 JS 命中测试：被遮挡/不可见/pointer-events:none
+	// 都会返回 NotInteractableError，语义等价于原先的 elementFromPoint 检测。
+	if _, err := elem.Interactable(); err != nil {
+		var notInteractable *rod.NotInteractableError
+		if errors.As(err, &notInteractable) {
+			return true, nil
 		}
-		const x = rect.left + rect.width / 2;
-		const y = rect.top + rect.height / 2;
-		const target = document.elementFromPoint(x, y);
-		return !(target === this || this.contains(target));
-	}`)
-	if err != nil {
 		return false, err
 	}
-
-	return result.Value.Bool(), nil
+	return false, nil
 }
 
 func uploadImages(page *rod.Page, imagesPaths []string) error {
@@ -915,16 +910,8 @@ func setOriginal(page *rod.Page) error {
 			continue
 		}
 
-		// 检查开关是否已打开
-		checked, err := switchElem.Eval(`() => {
-			const input = this.querySelector('input[type="checkbox"]');
-			return input ? input.checked : false;
-		}`)
-		if err != nil {
-			continue
-		}
-
-		if checked.Value.Bool() {
+		// 检查开关是否已打开（go-rod 原生读取 checkbox 状态）
+		if switchElementChecked(switchElem) {
 			slog.Info("原创声明已开启")
 			return nil
 		}
@@ -948,89 +935,100 @@ func setOriginal(page *rod.Page) error {
 	return errors.New("未找到原创声明选项")
 }
 
-// confirmOriginalDeclaration 处理原创声明确认弹窗
+// confirmOriginalDeclaration 处理原创声明确认弹窗（go-rod 原生定位与点击，
+// 避免 JS 合成 click 产生 isTrusted=false 的自动化特征）。
 func confirmOriginalDeclaration(page *rod.Page) error {
 	// 等待确认弹窗出现
 	time.Sleep(800 * time.Millisecond)
 
-	// 使用 JavaScript 直接处理弹窗，更可靠
-	result, err := page.Eval(`
-		() => {
-			// 查找包含"原创声明须知"的 footer 区域
-			const footers = document.querySelectorAll('div.footer');
-			for (const footer of footers) {
-				// 检查是否包含原创声明相关内容
-				if (!footer.textContent.includes('原创声明须知')) {
-					continue;
-				}
-
-				// 找到 checkbox 并勾选
-				const checkbox = footer.querySelector('div.d-checkbox input[type="checkbox"]');
-				if (checkbox && !checkbox.checked) {
-					checkbox.click();
-					console.log('已勾选原创声明须知 checkbox');
-				}
-
-				// 等待一下让按钮变为可用
-				return 'found_footer';
-			}
-			return 'footer_not_found';
-		}
-	`)
-	if err != nil {
-		slog.Warn("执行查找弹窗脚本失败", "error", err)
-	} else if result.Value.String() == "footer_not_found" {
+	// 1. 勾选"原创声明须知" checkbox（原生点击）
+	if footer := findFooterByText(page, "原创声明须知"); footer != nil {
+		checkFooterCheckbox(footer)
+	} else {
 		slog.Warn("未找到原创声明确认弹窗的 footer")
 	}
 
 	time.Sleep(500 * time.Millisecond)
 
-	// 再次使用 JavaScript 点击声明原创按钮
-	result2, err := page.Eval(`
-		() => {
-			const footers = document.querySelectorAll('div.footer');
-			for (const footer of footers) {
-				if (!footer.textContent.includes('声明原创')) {
-					continue;
-				}
-
-				// 找到声明原创按钮
-				const btn = footer.querySelector('button.custom-button');
-				if (btn) {
-					// 检查是否禁用
-					if (btn.classList.contains('disabled') || btn.disabled) {
-						// 尝试再次勾选 checkbox
-						const checkbox = footer.querySelector('div.d-checkbox input[type="checkbox"]');
-						if (checkbox && !checkbox.checked) {
-							checkbox.click();
-						}
-						return 'button_disabled';
-					}
-					btn.click();
-					return 'clicked';
-				}
-			}
-			return 'button_not_found';
-		}
-	`)
-	if err != nil {
-		return errors.Wrap(err, "执行点击按钮脚本失败")
-	}
-
-	status := result2.Value.String()
-	slog.Info("原创声明确认结果", "status", status)
-
-	if status == "button_not_found" {
+	// 2. 点击"声明原创"按钮
+	footer := findFooterByText(page, "声明原创")
+	if footer == nil {
 		return errors.New("未找到声明原创按钮")
 	}
-	if status == "button_disabled" {
-		return errors.New("声明原创按钮仍处于禁用状态")
+	btn, err := footer.Element("button.custom-button")
+	if err != nil {
+		return errors.New("未找到声明原创按钮")
+	}
+
+	// 按钮禁用时，尝试再次勾选 checkbox 后重试
+	if isButtonDisabled(btn) {
+		checkFooterCheckbox(footer)
+		time.Sleep(300 * time.Millisecond)
+		if isButtonDisabled(btn) {
+			return errors.New("声明原创按钮仍处于禁用状态")
+		}
+	}
+
+	if err := btn.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		return errors.Wrap(err, "点击声明原创按钮失败")
 	}
 
 	slog.Info("已成功点击声明原创按钮")
 	time.Sleep(300 * time.Millisecond)
 
 	return nil
+}
+
+// findFooterByText 返回第一个文本包含 text 的 div.footer 元素，未找到返回 nil。
+func findFooterByText(page *rod.Page, text string) *rod.Element {
+	footers, err := page.Elements("div.footer")
+	if err != nil {
+		return nil
+	}
+	for _, f := range footers {
+		if t, err := f.Text(); err == nil && strings.Contains(t, text) {
+			return f
+		}
+	}
+	return nil
+}
+
+// checkFooterCheckbox 勾选 footer 内未选中的 checkbox（go-rod 原生点击）。
+func checkFooterCheckbox(footer *rod.Element) {
+	cb, err := footer.Element(`div.d-checkbox input[type="checkbox"]`)
+	if err != nil {
+		return
+	}
+	if checked, err := cb.Property("checked"); err == nil && checked.Bool() {
+		return
+	}
+	if err := cb.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		slog.Warn("勾选原创声明须知 checkbox 失败", "error", err)
+	}
+}
+
+// isButtonDisabled 判断按钮是否禁用（class 含 disabled 或 disabled 属性为真）。
+func isButtonDisabled(btn *rod.Element) bool {
+	if cls, err := btn.Attribute("class"); err == nil && cls != nil && strings.Contains(*cls, "disabled") {
+		return true
+	}
+	if v, err := btn.Property("disabled"); err == nil && v.Bool() {
+		return true
+	}
+	return false
+}
+
+// switchElementChecked 读取 d-switch 内 checkbox 的选中状态（go-rod 原生，无需 JS）。
+func switchElementChecked(switchElem *rod.Element) bool {
+	cb, err := switchElem.Element(`input[type="checkbox"]`)
+	if err != nil {
+		return false
+	}
+	v, err := cb.Property("checked")
+	if err != nil {
+		return false
+	}
+	return v.Bool()
 }
 
 // bindProducts 绑定商品到发布内容
