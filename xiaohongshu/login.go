@@ -20,18 +20,16 @@ func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 	pp := a.page.Context(ctx)
 	pp.MustNavigate("https://www.xiaohongshu.com/explore").MustWaitLoad()
 
-	time.Sleep(1 * time.Second)
+	// 等待 SPA 完成渲染后再检查，避免在页面未就绪时反复查询 DOM（Element() 会
+	// 在 timeout 内高频重试，产生与 feeds.go polling 同类的自动化特征）。
+	pp.MustWaitDOMStable()
 
-	exists, _, err := pp.Has(`.main-container .user .link-wrapper .channel`)
+	exists, _, err := pp.Has(".main-container .user .link-wrapper .channel")
 	if err != nil {
-		return false, errors.Wrap(err, "check login status failed")
+		return false, nil
 	}
 
-	if !exists {
-		return false, errors.Wrap(err, "login status element not found")
-	}
-
-	return true, nil
+	return exists, nil
 }
 
 func (a *LoginAction) Login(ctx context.Context) error {

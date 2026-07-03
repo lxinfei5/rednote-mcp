@@ -42,6 +42,9 @@ func (s *AppServer) Start(port string) error {
 		Handler: s.router,
 	}
 
+	// 异步预热浏览器，让 Chrome 在后台启动，避免首次工具调用时阻塞等待
+	WarmupSharedBrowser()
+
 	// 启动服务器的 goroutine
 	go func() {
 		logrus.Infof("启动 HTTP 服务器: %s", port)

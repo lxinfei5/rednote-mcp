@@ -101,16 +101,13 @@ func (s *XiaohongshuService) DeleteCookies(ctx context.Context) error {
 
 // CheckLoginStatus 检查登录状态
 func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatusResponse, error) {
-	b := newBrowser()
-	defer b.Close()
-
-	page := b.NewPage()
-	defer page.Close()
-
-	loginAction := xiaohongshu.NewLogin(page)
-
-	isLoggedIn, err := loginAction.CheckLoginStatus(ctx)
-	if err != nil {
+	var isLoggedIn bool
+	if err := withSharedPage(func(page *rod.Page) error {
+		loginAction := xiaohongshu.NewLogin(page)
+		var err error
+		isLoggedIn, err = loginAction.CheckLoginStatus(ctx)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 
@@ -486,7 +483,10 @@ func (s *XiaohongshuService) ReplyCommentToFeed(ctx context.Context, feedID, xse
 }
 
 func newBrowser() *browser.Browser {
-	return browser.NewBrowser(configs.IsHeadless(), browser.WithBinPath(configs.GetBinPath()))
+	return browser.NewBrowser(configs.IsHeadless(),
+		browser.WithBinPath(configs.GetBinPath()),
+		browser.WithUserDataDir(configs.GetUserDataDir()),
+	)
 }
 
 func saveCookies(page *rod.Page) error {
