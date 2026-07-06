@@ -355,6 +355,9 @@ func (s *XiaohongshuService) ListFeeds(ctx context.Context) (*FeedsListResponse,
 }
 
 func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, filters ...xiaohongshu.FilterOption) (*FeedsListResponse, error) {
+	if err := xhsGateCheck("search_feeds"); err != nil {
+		return nil, err
+	}
 	var feeds []xiaohongshu.Feed
 	if err := withSharedPage(func(page *rod.Page) error {
 		action := xiaohongshu.NewSearchAction(page)
@@ -362,9 +365,12 @@ func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, fi
 		feeds, err = action.Search(ctx, keyword, filters...)
 		return err
 	}); err != nil {
+		xhsMarkRisk("search_feeds", err, "")
 		return nil, err
 	}
-
+	if blob, err := json.Marshal(feeds); err == nil {
+		xhsMarkRisk("search_feeds", nil, string(blob))
+	}
 	return &FeedsListResponse{
 		Feeds: feeds,
 		Count: len(feeds),
@@ -378,6 +384,9 @@ func (s *XiaohongshuService) GetFeedDetail(ctx context.Context, feedID, xsecToke
 
 // GetFeedDetailWithConfig 使用配置获取Feed详情
 func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config xiaohongshu.CommentLoadConfig) (*FeedDetailResponse, error) {
+	if err := xhsGateCheck("get_feed_detail"); err != nil {
+		return nil, err
+	}
 	var result *xiaohongshu.FeedDetailResponse
 	if err := withSharedPage(func(page *rod.Page) error {
 		action := xiaohongshu.NewFeedDetailAction(page)
@@ -385,9 +394,14 @@ func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID
 		result, err = action.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, config)
 		return err
 	}); err != nil {
+		xhsMarkRisk("get_feed_detail", err, "")
 		return nil, err
 	}
-
+	if result != nil {
+		if blob, err := json.Marshal(result); err == nil {
+			xhsMarkRisk("get_feed_detail", nil, string(blob))
+		}
+	}
 	return &FeedDetailResponse{
 		FeedID: feedID,
 		Data:   result,

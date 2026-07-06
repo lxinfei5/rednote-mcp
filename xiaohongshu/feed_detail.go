@@ -547,24 +547,22 @@ func scrollToCommentsArea(page *rod.Page) {
 	smartScroll(page, 100)
 }
 
-// smartScroll 智能滚动：向评论滚动容器派发 wheel 事件以触发懒加载。
-// 注：实测原生 Mouse.Scroll（鼠标锚点）在 PC 详情页评论加载上不如直接向目标容器
-// 派发 wheel 稳定（会漏加载），故保留合成 wheel；其 isTrusted=false 属低风险信号。
+// smartScroll 智能滚动：用真实 CDP 鼠标滚轮触发评论懒加载。
+//
+// 改用可信输入：page.Mouse.Scroll 派发 Input.dispatchMouseEvent(mouseWheel)，isTrusted=true，
+// 不再是前端可检测的合成 WheelEvent(new WheelEvent + dispatchEvent, isTrusted=false)。先把滚动
+// 容器 ScrollIntoView 带入视口，使可信 wheel 落在 .note-scroller 上（旧代码用合成事件的原因是
+// 视口级 wheel 在 PC 详情页会漏加载评论；ScrollIntoView 后容器在视口内，wheel 命中它）。
+// Scroll 返回 error 时只记录不中断——评论懒加载是 best-effort，主笔记内容不受影响。
 func smartScroll(page *rod.Page, delta float64) {
-	page.MustEval(`(delta) => {
-		let targetElement = document.querySelector('.note-scroller')
-			|| document.querySelector('.interaction-container')
-			|| document.documentElement;
-
-		const wheelEvent = new WheelEvent('wheel', {
-			deltaY: delta,
-			deltaMode: 0,
-			bubbles: true,
-			cancelable: true,
-			view: window
-		});
-		targetElement.dispatchEvent(wheelEvent);
-	}`, delta)
+	if el, err := page.Timeout(1 * time.Second).Element(".note-scroller, .interaction-container"); err == nil && el != nil {
+		if err := el.ScrollIntoView(); err != nil {
+			logrus.Debugf("smartScroll: ScrollIntoView failed: %v", err)
+		}
+	}
+	if err := page.Mouse.Scroll(0, delta, 5); err != nil { // 5 steps for a smooth, human-like wheel
+		logrus.Debugf("smartScroll: trusted mouse wheel failed: %v", err)
+	}
 }
 
 func scrollToLastComment(page *rod.Page) {
