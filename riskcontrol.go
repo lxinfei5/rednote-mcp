@@ -17,7 +17,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -42,12 +41,10 @@ type cooldownRecord struct {
 var cooldownMu sync.Mutex
 
 func cooldownFile() string {
-	home := os.Getenv("ROS_SOCIAL_HOME")
-	if home == "" {
-		home = filepath.Join(os.Getenv("HOME"), ".researchos", "social_mcp")
-	}
-	_ = os.MkdirAll(home, 0o755)
-	return filepath.Join(home, "xhs_cooldown.json")
+	// rednote-mcp's own state, independent of ResearchOS. Uses CWD (binary working directory)
+	// — same convention as cookies.json (resolved relatively). The daemon script sets cwd to
+	// the canonical dir; manual runs inherit the user's cwd.
+	return "cooldown.json"
 }
 
 // xhsCooldownActive returns the active record if XHS is currently in cooldown (and lazily clears
