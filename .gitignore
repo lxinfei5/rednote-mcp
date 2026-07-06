@@ -38,10 +38,12 @@ go.work.sum
 xiaohongshu-mcp
 xiaohongshu-mcp-darwin-*
 xiaohongshu-login-darwin-*
+xiaohongshu-mcp-test
 *.bak
 
 # Test scripts
 test_*.sh
+test_*.py
 
 # Cookies files (contain sensitive login information)
 cookies.json
