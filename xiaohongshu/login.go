@@ -17,7 +17,7 @@ func NewLogin(page *rod.Page) *LoginAction {
 }
 
 func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
-	pp := a.page.Context(ctx)
+	pp := a.page.Context(ctx).Timeout(30 * time.Second)
 	pp.MustNavigate("https://www.xiaohongshu.com/explore").MustWaitLoad()
 
 	// 等待 SPA 完成渲染后再检查，避免在页面未就绪时反复查询 DOM（Element() 会

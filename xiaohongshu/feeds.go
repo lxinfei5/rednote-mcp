@@ -15,7 +15,7 @@ type FeedsListAction struct {
 }
 
 func NewFeedsListAction(page *rod.Page) *FeedsListAction {
-	pp := page.Timeout(60 * time.Second)
+	pp := page.Timeout(30 * time.Second)
 
 	pp.MustNavigate("https://www.xiaohongshu.com")
 	// MustWaitDOMStable 等待 load 事件 + 网络空闲 + DOM 稳定，是 SPA 页面的正确等待方式。

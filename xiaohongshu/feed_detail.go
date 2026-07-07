@@ -77,7 +77,11 @@ func (f *FeedDetailAction) GetFeedDetail(ctx context.Context, feedID, xsecToken 
 }
 
 func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
-	page := f.page.Context(ctx).Timeout(5 * time.Minute)
+	tabTimeout := 30 * time.Second
+	if loadAllComments {
+		tabTimeout = 3 * time.Minute
+	}
+	page := f.page.Context(ctx).Timeout(tabTimeout)
 	url := makeFeedDetailURL(feedID, xsecToken)
 
 	logrus.Infof("打开 feed 详情页: %s", url)

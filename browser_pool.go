@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,121 +14,311 @@ import (
 	"github.com/xpzouying/xiaohongshu-mcp/configs"
 )
 
-const minInterOpGap = 800 * time.Millisecond
-
-var (
-	poolMu     sync.Mutex
-	sharedConn *browser.Browser
-	warmupPage *rod.Page
-	lastPageOp time.Time
+const (
+	maxConcurrentTabs    = 3
+	minInterOpGap        = 800 * time.Millisecond
+	closeBrowserTimeout  = 5 * time.Second
+	tabTimeoutRead       = 30 * time.Second
+	tabTimeoutReadLong   = 3 * time.Minute
+	tabTimeoutWrite      = 5 * time.Minute
+	tabTimeoutWriteVideo = 10 * time.Minute
 )
 
-func getBrowserLocked() *browser.Browser {
-	if sharedConn != nil {
-		return sharedConn
-	}
+// slotWaitTimeout 等槽位最长时间，测试可临时改小。
+var slotWaitTimeout = 60 * time.Second
 
-	logrus.Infof("启动常驻浏览器实例 (headless=%v)...", configs.IsHeadless())
-	sharedConn = newBrowser()
-	logrus.Infof("常驻浏览器实例已就绪")
-	return sharedConn
+var (
+	ErrPoolBusy           = errors.New("browser pool busy")
+	ErrTabTimeout         = errors.New("tab operation timeout")
+	ErrBrowserUnavailable = errors.New("browser unavailable")
+)
+
+type tabTimeoutClass int
+
+const (
+	tabRead tabTimeoutClass = iota
+	tabReadLong
+	tabWrite
+	tabWriteVideo
+)
+
+func timeoutFor(class tabTimeoutClass) time.Duration {
+	switch class {
+	case tabReadLong:
+		return tabTimeoutReadLong
+	case tabWrite:
+		return tabTimeoutWrite
+	case tabWriteVideo:
+		return tabTimeoutWriteVideo
+	default:
+		return tabTimeoutRead
+	}
 }
 
-func healthCheckLocked(b *browser.Browser) (err error) {
+type browserPool struct {
+	lifecycleMu sync.Mutex
+	conn        *browser.Browser
+	inflight    int
+	gen         uint64
+
+	pageSem chan struct{}
+
+	paceMu     sync.Mutex
+	lastPageOp time.Time
+
+	longLivedMu     sync.Mutex
+	warmupPage      *rod.Page
+	longLivedExtras []*rod.Page
+}
+
+var sharedPool = &browserPool{
+	pageSem: make(chan struct{}, maxConcurrentTabs),
+}
+
+func isConnDeadErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	s := err.Error()
+	return strings.Contains(s, "use of closed network connection") ||
+		strings.Contains(s, "connection reset") ||
+		strings.Contains(s, "EOF") ||
+		strings.Contains(s, "Session with given id not found")
+}
+
+func (p *browserPool) waitForSlot(ctx context.Context) (time.Duration, error) {
+	start := time.Now()
+	timer := time.NewTimer(slotWaitTimeout)
+	defer timer.Stop()
+
+	select {
+	case p.pageSem <- struct{}{}:
+		return time.Since(start), nil
+	case <-timer.C:
+		return time.Since(start), fmt.Errorf("%w: waited %v for one of %d slots",
+			ErrPoolBusy, slotWaitTimeout, maxConcurrentTabs)
+	case <-ctx.Done():
+		return time.Since(start), ctx.Err()
+	}
+}
+
+func (p *browserPool) releaseSlot() {
+	<-p.pageSem
+}
+
+func (p *browserPool) pace() {
+	p.paceMu.Lock()
+	defer p.paceMu.Unlock()
+	if gap := time.Since(p.lastPageOp); gap < minInterOpGap {
+		time.Sleep(minInterOpGap - gap)
+	}
+	p.lastPageOp = time.Now()
+}
+
+func (p *browserPool) ensureBrowserLocked() (*browser.Browser, error) {
+	if p.conn != nil {
+		return p.conn, nil
+	}
+	logrus.Infof("启动常驻浏览器实例 (headless=%v)...", configs.IsHeadless())
+	p.conn = newBrowser()
+	logrus.Infof("常驻浏览器实例已就绪")
+	return p.conn, nil
+}
+
+func (p *browserPool) healthCheckLocked(b *browser.Browser) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("browser 健康检查失败: %v", r)
 		}
 	}()
-	page := b.NewPage()
+	page, err := b.NewPageSafe()
+	if err != nil {
+		return err
+	}
 	page.Close()
 	return nil
 }
 
-func closeSharedBrowserLocked() {
-	if warmupPage != nil {
-		warmupPage.Close()
-		warmupPage = nil
+func (p *browserPool) registerLongLived(page *rod.Page) {
+	p.longLivedMu.Lock()
+	defer p.longLivedMu.Unlock()
+	if page == p.warmupPage {
+		return
 	}
-	if sharedConn != nil {
-		sharedConn.Close()
-		sharedConn = nil
-		logrus.Infof("常驻浏览器实例已关闭")
+	p.longLivedExtras = append(p.longLivedExtras, page)
+}
+
+// closeLongLivedPages 关闭 warmup/扫码等 long-lived tab，返回关闭数量。调用方需已持 lifecycleMu。
+func (p *browserPool) closeLongLivedPages() int {
+	p.longLivedMu.Lock()
+	defer p.longLivedMu.Unlock()
+	closed := 0
+	if p.warmupPage != nil {
+		p.warmupPage.Close()
+		p.warmupPage = nil
+		closed++
+	}
+	for _, pg := range p.longLivedExtras {
+		pg.Close()
+		closed++
+	}
+	p.longLivedExtras = nil
+	if closed > 0 && p.inflight >= closed {
+		p.inflight -= closed
+	} else if closed > 0 && p.inflight > 0 {
+		p.inflight = 0
+	}
+	return closed
+}
+
+func (p *browserPool) closeConnLocked(b *browser.Browser) {
+	if b == nil {
+		return
+	}
+	b.CloseWithTimeout(closeBrowserTimeout)
+	logrus.Infof("常驻浏览器实例已关闭")
+}
+
+func (p *browserPool) decInflight() {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+	if p.inflight > 0 {
+		p.inflight--
 	}
 }
 
-func withSharedPage(fn func(page *rod.Page) error) error {
-	poolMu.Lock()
-	defer poolMu.Unlock()
+func (p *browserPool) openPage() (page *rod.Page, err error) {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
 
-	if gap := time.Since(lastPageOp); gap < minInterOpGap {
-		time.Sleep(minInterOpGap - gap)
-	}
-	defer func() { lastPageOp = time.Now() }()
-
-	// 直接开正式 page 并对失败自愈，省去每次操作额外开/关一个探活 page 的开销。
-	page, err := openPageLocked()
+	b, err := p.ensureBrowserLocked()
 	if err != nil {
+		return nil, err
+	}
+
+	page, err = b.NewPageSafe()
+	if err != nil {
+		if !isConnDeadErr(err) {
+			return nil, err
+		}
 		logrus.Warnf("打开页面失败，尝试重建常驻浏览器: %v", err)
-		closeSharedBrowserLocked()
-		page, err = openPageLocked()
+		p.closeLongLivedPages()
+		p.closeConnLocked(p.conn)
+		p.conn = nil
+		p.gen++
+
+		b, err = p.ensureBrowserLocked()
 		if err != nil {
-			closeSharedBrowserLocked()
-			return err
+			return nil, err
+		}
+		page, err = b.NewPageSafe()
+		if err != nil {
+			p.closeConnLocked(p.conn)
+			p.conn = nil
+			return nil, err
 		}
 	}
-	defer page.Close()
 
-	return fn(page)
+	p.inflight++
+	return page, nil
 }
 
-// openPageLocked 在常驻 browser 上开一个 page；连接已断时 NewPage 会 panic，
-// 用 recover 转成 error 交由调用方重建。调用方必须已持有 poolMu。
-func openPageLocked() (page *rod.Page, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("打开页面失败: %v", r)
-			page = nil
+func releasePageInflight() {
+	sharedPool.decInflight()
+}
+
+// withSharedPageCtx 在常驻 browser 上开 tab 执行 fn；最多 3 个 tab 并发，fn 在窄锁外执行。
+func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page *rod.Page) error) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	waitMs, err := sharedPool.waitForSlot(ctx)
+	if err != nil {
+		return err
+	}
+
+	released := false
+	release := func() {
+		if !released {
+			released = true
+			sharedPool.releaseSlot()
 		}
+	}
+	defer release()
+
+	sharedPool.pace()
+
+	page, err := sharedPool.openPage()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		page.Close()
+		sharedPool.decInflight()
 	}()
-	b := getBrowserLocked()
-	page = b.NewPage()
+
+	tabTimeout := timeoutFor(class)
+	opCtx, cancel := context.WithTimeout(ctx, tabTimeout)
+	defer cancel()
+
+	start := time.Now()
+	err = fn(page.Context(opCtx))
+	tabMs := time.Since(start).Milliseconds()
+
+	fields := logrus.Fields{
+		"wait_slot_ms":    waitMs.Milliseconds(),
+		"tab_duration_ms": tabMs,
+		"timeout_class":   class,
+	}
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(opCtx.Err(), context.DeadlineExceeded) {
+			logrus.WithFields(fields).Warnf("tab 操作超时(%v)", tabTimeout)
+			return fmt.Errorf("%w: exceeded %v", ErrTabTimeout, tabTimeout)
+		}
+		logrus.WithFields(fields).Debugf("tab 操作失败: %v", err)
+		return err
+	}
+	logrus.WithFields(fields).Debug("tab 操作完成")
+	return nil
+}
+
+// acquireLongLivedPage 开 long-lived tab（扫码登录等），不占 3 槽位并发额度。
+func acquireLongLivedPage(ctx context.Context) (page *rod.Page, err error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	waitMs, err := sharedPool.waitForSlot(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// 开完 page 立即释放槽位，后台 goroutine 持有 tab 不再阻塞其他请求。
+	defer sharedPool.releaseSlot()
+
+	sharedPool.pace()
+
+	page, err = sharedPool.openPage()
+	if err != nil {
+		return nil, err
+	}
+
+	// long-lived page 计入 inflight，关闭时由调用方 decInflight。
+	sharedPool.registerLongLived(page)
+	logrus.WithField("wait_slot_ms", waitMs.Milliseconds()).Debug("long-lived page 已创建")
 	return page, nil
 }
 
 func closeSharedBrowser() {
-	poolMu.Lock()
-	defer poolMu.Unlock()
-	closeSharedBrowserLocked()
-}
-
-// newSharedBrowserPage 在常驻 browser 上打开一个由调用方管理生命周期的 page，
-// 用于需要长时间保留页面的流程（如扫码登录等待）。复用常驻 Chrome，不再另起
-// 第二个进程争用同一 profile（Chrome 单例锁会导致第二实例启动失败）。
-// 调用方负责在用完后 page.Close()。
-func newSharedBrowserPage() (page *rod.Page, err error) {
-	poolMu.Lock()
-	defer poolMu.Unlock()
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("打开浏览器页面失败: %v", r)
-			page = nil
-		}
-	}()
-
-	b := getBrowserLocked()
-	if e := healthCheckLocked(b); e != nil {
-		logrus.Warnf("常驻浏览器不可用，尝试重建: %v", e)
-		closeSharedBrowserLocked()
-		b = getBrowserLocked()
-	}
-	page = b.NewPage()
-	return page, nil
+	sharedPool.lifecycleMu.Lock()
+	defer sharedPool.lifecycleMu.Unlock()
+	sharedPool.closeLongLivedPages()
+	sharedPool.closeConnLocked(sharedPool.conn)
+	sharedPool.conn = nil
+	sharedPool.gen++
 }
 
 // WarmupSharedBrowser 预启动常驻浏览器实例并自动打开小红书首页。
-// 有头模式下，启动后自动导航到小红书登录页，方便用户扫码登录；
-// 无头模式下不自动打开页面，仅做健康检查。
 func WarmupSharedBrowser() {
 	go func() {
 		wp := warmupBrowserLocked()
@@ -133,8 +326,6 @@ func WarmupSharedBrowser() {
 			return
 		}
 
-		// 导航在锁外进行，避免长时间持锁；使用局部 page 句柄，失败（含被并发关闭）
-		// 时 recover 兜底，不影响后续使用。
 		defer func() {
 			if r := recover(); r != nil {
 				logrus.Warnf("自动打开小红书页面时出错（不影响使用）: %v", r)
@@ -146,35 +337,43 @@ func WarmupSharedBrowser() {
 	}()
 }
 
-// warmupBrowserLocked 在持锁下预热常驻浏览器：有头模式返回待导航的 warmupPage，否则 nil。
-// 任何 panic（Chrome 启动失败、profile 被占用等）都被 recover 并降级为 warn，
-// 不会让后台 goroutine 崩溃整个进程；锁通过 defer 保证释放。
 func warmupBrowserLocked() (wp *rod.Page) {
-	poolMu.Lock()
-	defer poolMu.Unlock()
+	sharedPool.lifecycleMu.Lock()
+	defer sharedPool.lifecycleMu.Unlock()
 	defer func() {
 		if r := recover(); r != nil {
 			logrus.Warnf("浏览器预热失败: %v，将在首次使用时重建", r)
-			closeSharedBrowserLocked()
+			sharedPool.closeLongLivedPages()
+			sharedPool.closeConnLocked(sharedPool.conn)
+			sharedPool.conn = nil
 			wp = nil
 		}
 	}()
 
-	if sharedConn != nil {
+	if sharedPool.conn != nil {
 		return nil
 	}
 
 	logrus.Infof("预热常驻浏览器实例 (headless=%v)...", configs.IsHeadless())
-	b := getBrowserLocked()
-	if err := healthCheckLocked(b); err != nil {
+	b, err := sharedPool.ensureBrowserLocked()
+	if err != nil {
+		return nil
+	}
+	if err := sharedPool.healthCheckLocked(b); err != nil {
 		logrus.Warnf("浏览器预热探活失败: %v，将在首次使用时重建", err)
-		closeSharedBrowserLocked()
+		sharedPool.closeConnLocked(sharedPool.conn)
+		sharedPool.conn = nil
 		return nil
 	}
 
 	if !configs.IsHeadless() {
-		warmupPage = b.NewPage()
-		return warmupPage
+		page, err := b.NewPageSafe()
+		if err != nil {
+			return nil
+		}
+		sharedPool.warmupPage = page
+		sharedPool.inflight++
+		return page
 	}
 
 	logrus.Infof("常驻浏览器实例预热完成")

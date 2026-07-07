@@ -47,6 +47,9 @@ var xhsBrowserInfraErrors = []string{
 	"Session with given id not found",
 	"browser 健康检查失败",
 	"context deadline exceeded",
+	"browser pool busy",
+	"tab operation timeout",
+	"browser unavailable",
 	"no such window",
 	"target closed",
 }

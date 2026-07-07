@@ -2,8 +2,10 @@ package browser
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
@@ -127,7 +129,40 @@ func (b *Browser) NewPage() *rod.Page {
 	return stealth.MustPage(b.browser)
 }
 
+// NewPageSafe 开 tab，连接异常时返回 error 而非 panic。
+func (b *Browser) NewPageSafe() (page *rod.Page, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("打开页面失败: %v", r)
+			page = nil
+		}
+	}()
+	return stealth.Page(b.browser)
+}
+
 func (b *Browser) Close() {
-	b.browser.MustClose()
-	b.launcher.Cleanup()
+	b.CloseWithTimeout(5 * time.Second)
+}
+
+// CloseWithTimeout 关闭浏览器；超时后 Kill 进程，避免死连接永久阻塞。
+// 不调用 launcher.Cleanup()，防止误删持久化 Chrome profile。
+func (b *Browser) CloseWithTimeout(timeout time.Duration) {
+	if b == nil {
+		return
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if b.browser != nil {
+			_ = b.browser.Close()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		logrus.Warnf("browser close timeout after %v, killing process", timeout)
+	}
+	if b.launcher != nil {
+		b.launcher.Kill()
+	}
 }

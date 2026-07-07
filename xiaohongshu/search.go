@@ -160,7 +160,7 @@ type SearchAction struct {
 }
 
 func NewSearchAction(page *rod.Page) *SearchAction {
-	pp := page.Timeout(60 * time.Second)
+	pp := page.Timeout(30 * time.Second)
 
 	return &SearchAction{page: pp}
 }

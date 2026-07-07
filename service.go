@@ -102,7 +102,7 @@ func (s *XiaohongshuService) DeleteCookies(ctx context.Context) error {
 // CheckLoginStatus 检查登录状态
 func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatusResponse, error) {
 	var isLoggedIn bool
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabRead, func(page *rod.Page) error {
 		loginAction := xiaohongshu.NewLogin(page)
 		var err error
 		isLoggedIn, err = loginAction.CheckLoginStatus(ctx)
@@ -122,7 +122,7 @@ func (s *XiaohongshuService) CheckLoginStatus(ctx context.Context) (*LoginStatus
 // GetLoginQrcode 获取登录的扫码二维码。
 // 在常驻浏览器中打开一个登录 tab，避免另起第二个 Chrome 争用同一 profile。
 func (s *XiaohongshuService) GetLoginQrcode(ctx context.Context) (*LoginQrcodeResponse, error) {
-	page, err := newSharedBrowserPage()
+	page, err := acquireLongLivedPage(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -132,6 +132,7 @@ func (s *XiaohongshuService) GetLoginQrcode(ctx context.Context) (*LoginQrcodeRe
 	defer func() {
 		if !handedOff {
 			_ = page.Close()
+			releasePageInflight()
 		}
 	}()
 
@@ -153,6 +154,7 @@ func (s *XiaohongshuService) GetLoginQrcode(ctx context.Context) (*LoginQrcodeRe
 				logrus.Warnf("等待扫码登录时出错: %v", r)
 			}
 			_ = page.Close()
+			releasePageInflight()
 		}()
 
 		ctxTimeout, cancel := context.WithTimeout(context.Background(), timeout)
@@ -247,7 +249,7 @@ func (s *XiaohongshuService) processImages(images []string) ([]string, error) {
 
 // publishContent 执行内容发布
 func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohongshu.PublishImageContent) error {
-	return withSharedPage(func(page *rod.Page) error {
+	return withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action, err := xiaohongshu.NewPublishImageAction(page)
 		if err != nil {
 			return err
@@ -324,7 +326,7 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 
 // publishVideo 执行视频发布
 func (s *XiaohongshuService) publishVideo(ctx context.Context, content xiaohongshu.PublishVideoContent) error {
-	return withSharedPage(func(page *rod.Page) error {
+	return withSharedPageCtx(ctx, tabWriteVideo, func(page *rod.Page) error {
 		action, err := xiaohongshu.NewPublishVideoAction(page)
 		if err != nil {
 			return err
@@ -336,7 +338,7 @@ func (s *XiaohongshuService) publishVideo(ctx context.Context, content xiaohongs
 // ListFeeds 获取Feeds列表
 func (s *XiaohongshuService) ListFeeds(ctx context.Context) (*FeedsListResponse, error) {
 	var feeds []xiaohongshu.Feed
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabRead, func(page *rod.Page) error {
 		action := xiaohongshu.NewFeedsListAction(page)
 		var err error
 		feeds, err = action.GetFeedsList(ctx)
@@ -359,7 +361,7 @@ func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, fi
 		return nil, err
 	}
 	var feeds []xiaohongshu.Feed
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabRead, func(page *rod.Page) error {
 		action := xiaohongshu.NewSearchAction(page)
 		var err error
 		feeds, err = action.Search(ctx, keyword, filters...)
@@ -390,7 +392,11 @@ func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID
 		return nil, err
 	}
 	var result *xiaohongshu.FeedDetailResponse
-	if err := withSharedPage(func(page *rod.Page) error {
+	tabClass := tabRead
+	if loadAllComments {
+		tabClass = tabReadLong
+	}
+	if err := withSharedPageCtx(ctx, tabClass, func(page *rod.Page) error {
 		action := xiaohongshu.NewFeedDetailAction(page)
 		var err error
 		result, err = action.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, config)
@@ -414,7 +420,7 @@ func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID
 // UserProfile 获取用户信息
 func (s *XiaohongshuService) UserProfile(ctx context.Context, userID, xsecToken string) (*UserProfileResponse, error) {
 	var result *xiaohongshu.UserProfileResponse
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabRead, func(page *rod.Page) error {
 		action := xiaohongshu.NewUserProfileAction(page)
 		var err error
 		result, err = action.UserProfile(ctx, userID, xsecToken)
@@ -432,7 +438,7 @@ func (s *XiaohongshuService) UserProfile(ctx context.Context, userID, xsecToken 
 
 // PostCommentToFeed 发表评论到Feed
 func (s *XiaohongshuService) PostCommentToFeed(ctx context.Context, feedID, xsecToken, content string) (*PostCommentResponse, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewCommentFeedAction(page)
 		return action.PostComment(ctx, feedID, xsecToken, content)
 	}); err != nil {
@@ -444,7 +450,7 @@ func (s *XiaohongshuService) PostCommentToFeed(ctx context.Context, feedID, xsec
 
 // LikeFeed 点赞笔记
 func (s *XiaohongshuService) LikeFeed(ctx context.Context, feedID, xsecToken string) (*ActionResult, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewLikeAction(page)
 		return action.Like(ctx, feedID, xsecToken)
 	}); err != nil {
@@ -455,7 +461,7 @@ func (s *XiaohongshuService) LikeFeed(ctx context.Context, feedID, xsecToken str
 
 // UnlikeFeed 取消点赞笔记
 func (s *XiaohongshuService) UnlikeFeed(ctx context.Context, feedID, xsecToken string) (*ActionResult, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewLikeAction(page)
 		return action.Unlike(ctx, feedID, xsecToken)
 	}); err != nil {
@@ -466,7 +472,7 @@ func (s *XiaohongshuService) UnlikeFeed(ctx context.Context, feedID, xsecToken s
 
 // FavoriteFeed 收藏笔记
 func (s *XiaohongshuService) FavoriteFeed(ctx context.Context, feedID, xsecToken string) (*ActionResult, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewFavoriteAction(page)
 		return action.Favorite(ctx, feedID, xsecToken)
 	}); err != nil {
@@ -477,7 +483,7 @@ func (s *XiaohongshuService) FavoriteFeed(ctx context.Context, feedID, xsecToken
 
 // UnfavoriteFeed 取消收藏笔记
 func (s *XiaohongshuService) UnfavoriteFeed(ctx context.Context, feedID, xsecToken string) (*ActionResult, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewFavoriteAction(page)
 		return action.Unfavorite(ctx, feedID, xsecToken)
 	}); err != nil {
@@ -488,7 +494,7 @@ func (s *XiaohongshuService) UnfavoriteFeed(ctx context.Context, feedID, xsecTok
 
 // ReplyCommentToFeed 回复指定评论
 func (s *XiaohongshuService) ReplyCommentToFeed(ctx context.Context, feedID, xsecToken, commentID, userID, content string) (*ReplyCommentResponse, error) {
-	if err := withSharedPage(func(page *rod.Page) error {
+	if err := withSharedPageCtx(ctx, tabWrite, func(page *rod.Page) error {
 		action := xiaohongshu.NewCommentFeedAction(page)
 		return action.ReplyToComment(ctx, feedID, xsecToken, commentID, userID, content)
 	}); err != nil {
@@ -528,8 +534,8 @@ func saveCookies(page *rod.Page) error {
 
 // withBrowserPage 在常驻 browser 中开一个 tab 执行 fn（复用同一 Chrome 进程，
 // 不每次 spawn 新进程，避免在非 headless 模式下反复抢夺前台焦点）。
-func withBrowserPage(fn func(*rod.Page) error) error {
-	return withSharedPage(fn)
+func withBrowserPage(ctx context.Context, fn func(*rod.Page) error) error {
+	return withSharedPageCtx(ctx, tabRead, fn)
 }
 
 // GetMyProfile 获取当前登录用户的个人信息
@@ -537,7 +543,7 @@ func (s *XiaohongshuService) GetMyProfile(ctx context.Context) (*UserProfileResp
 	var result *xiaohongshu.UserProfileResponse
 	var err error
 
-	err = withBrowserPage(func(page *rod.Page) error {
+	err = withBrowserPage(ctx, func(page *rod.Page) error {
 		action := xiaohongshu.NewUserProfileAction(page)
 		result, err = action.GetMyProfileViaSidebar(ctx)
 		return err

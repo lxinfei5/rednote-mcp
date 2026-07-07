@@ -14,7 +14,7 @@ type UserProfileAction struct {
 }
 
 func NewUserProfileAction(page *rod.Page) *UserProfileAction {
-	pp := page.Timeout(60 * time.Second)
+	pp := page.Timeout(30 * time.Second)
 	return &UserProfileAction{page: pp}
 }
 
