@@ -22,6 +22,9 @@ const (
 	tabTimeoutReadLong   = 3 * time.Minute
 	tabTimeoutWrite      = 5 * time.Minute
 	tabTimeoutWriteVideo = 10 * time.Minute
+
+	// 连续超时阈值：达到后强制重建浏览器，避免挂起拖死服务
+	consecutiveTimeoutThreshold = 2
 )
 
 // slotWaitTimeout 等槽位最长时间，测试可临时改小。
@@ -69,6 +72,9 @@ type browserPool struct {
 	longLivedMu     sync.Mutex
 	warmupPage      *rod.Page
 	longLivedExtras []*rod.Page
+
+	// 连续超时计数（受 lifecycleMu 保护），用于触发 browser 重建
+	consecutiveTimeouts int
 }
 
 var sharedPool = &browserPool{
@@ -187,6 +193,34 @@ func (p *browserPool) decInflight() {
 	}
 }
 
+// noteHardTimeout 记录一次硬超时；连续达到阈值则立即销毁当前 browser 并标记重建。
+// 必须在持有生命周期锁的场景或内部自行加锁。
+func (p *browserPool) noteHardTimeout() {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+
+	p.consecutiveTimeouts++
+	logrus.Warnf("连续 tab 超时计数: %d/%d", p.consecutiveTimeouts, consecutiveTimeoutThreshold)
+
+	if p.consecutiveTimeouts >= consecutiveTimeoutThreshold {
+		logrus.Warnf("连续超时达到阈值，强制重建常驻浏览器以恢复服务")
+		p.closeLongLivedPages()
+		p.closeConnLocked(p.conn)
+		p.conn = nil
+		p.gen++
+		p.consecutiveTimeouts = 0
+	}
+}
+
+// noteSuccess 操作成功，重置连续超时计数。
+func (p *browserPool) noteSuccess() {
+	p.lifecycleMu.Lock()
+	defer p.lifecycleMu.Unlock()
+	if p.consecutiveTimeouts > 0 {
+		p.consecutiveTimeouts = 0
+	}
+}
+
 func (p *browserPool) openPage() (page *rod.Page, err error) {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
@@ -228,14 +262,18 @@ func releasePageInflight() {
 }
 
 // withSharedPageCtx 在常驻 browser 上开 tab 执行 fn；最多 3 个 tab 并发，fn 在窄锁外执行。
+// 多层硬超时保护：
+// - 软超时：context 传给 page（部分非 Must* 有效）
+// - 硬超时：goroutine + timer 兜底，Must* 卡死也必定返回 ErrTabTimeout
+// - 连续超时达到阈值后，强制重建 browser
 func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page *rod.Page) error) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	waitMs, err := sharedPool.waitForSlot(ctx)
-	if err != nil {
-		return err
+	waitMs, slotErr := sharedPool.waitForSlot(ctx)
+	if slotErr != nil {
+		return slotErr
 	}
 
 	released := false
@@ -249,9 +287,9 @@ func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page 
 
 	sharedPool.pace()
 
-	page, err := sharedPool.openPage()
-	if err != nil {
-		return err
+	page, openErr := sharedPool.openPage()
+	if openErr != nil {
+		return openErr
 	}
 	defer func() {
 		page.Close()
@@ -259,11 +297,50 @@ func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page 
 	}()
 
 	tabTimeout := timeoutFor(class)
-	opCtx, cancel := context.WithTimeout(ctx, tabTimeout)
-	defer cancel()
+
+	// 结果通道：goroutine 内执行 fn
+	type execResult struct {
+		err error
+	}
+	resultCh := make(chan execResult, 1)
+
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				// Must* API panic 转 error 返回
+				resultCh <- execResult{err: fmt.Errorf("rod 操作 panic: %v", r)}
+			}
+		}()
+		// 仍尝试传 context（对非 Must 路径有帮助）
+		opCtx, cancel := context.WithTimeout(ctx, tabTimeout)
+		defer cancel()
+		resultCh <- execResult{err: fn(page.Context(opCtx))}
+	}()
 
 	start := time.Now()
-	err = fn(page.Context(opCtx))
+
+	// 硬超时层：timer 保证必定返回，不依赖 Rod 是否尊重 context
+	timer := time.NewTimer(tabTimeout)
+	defer timer.Stop()
+
+	var execErr error
+	select {
+	case res := <-resultCh:
+		execErr = res.err
+	case <-timer.C:
+		// 硬超时：立即关闭卡住的 page，强制让调用方返回
+		logrus.WithField("timeout_class", class).Warnf("硬超时：强制关闭卡住的 tab (>%v)", tabTimeout)
+		_ = page.Close() // 触发内部等待解除，后续 Must* 会失败/ panic（由 recover 处理）
+		// 尝试快速收割晚到的结果，避免 goroutine 永远挂，但不阻塞主流程
+		go func() {
+			select {
+			case <-resultCh:
+			case <-time.After(1500 * time.Millisecond):
+			}
+		}()
+		execErr = fmt.Errorf("%w: hard-timeout after %v", ErrTabTimeout, tabTimeout)
+	}
+
 	tabMs := time.Since(start).Milliseconds()
 
 	fields := logrus.Fields{
@@ -271,16 +348,33 @@ func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page 
 		"tab_duration_ms": tabMs,
 		"timeout_class":   class,
 	}
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) || errors.Is(opCtx.Err(), context.DeadlineExceeded) {
+
+	if execErr != nil {
+		if isTabTimeoutErr(execErr) {
 			logrus.WithFields(fields).Warnf("tab 操作超时(%v)", tabTimeout)
+			sharedPool.noteHardTimeout()
 			return fmt.Errorf("%w: exceeded %v", ErrTabTimeout, tabTimeout)
 		}
-		logrus.WithFields(fields).Debugf("tab 操作失败: %v", err)
-		return err
+		logrus.WithFields(fields).Debugf("tab 操作失败: %v", execErr)
+		return execErr
 	}
+
 	logrus.WithFields(fields).Debug("tab 操作完成")
+	sharedPool.noteSuccess()
 	return nil
+}
+
+// isTabTimeoutErr 判断是否为 tab 超时类错误
+func isTabTimeoutErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, ErrTabTimeout) {
+		return true
+	}
+	s := err.Error()
+	// 硬超时我们自己产生的包装
+	return strings.Contains(s, "hard-timeout")
 }
 
 // acquireLongLivedPage 开 long-lived tab（扫码登录等），不占 3 槽位并发额度。
