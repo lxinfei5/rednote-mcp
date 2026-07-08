@@ -178,7 +178,7 @@ func (s *XiaohongshuService) GetLoginQrcode(ctx context.Context) (*LoginQrcodeRe
 func (s *XiaohongshuService) PublishContent(ctx context.Context, req *PublishRequest) (*PublishResponse, error) {
 	// 验证标题长度（小红书限制：最大20个字）
 	if xhsutil.CalcTitleLength(req.Title) > 20 {
-		return nil, fmt.Errorf("标题长度超过限制")
+		return nil, fmt.Errorf("title exceeds length limit")
 	}
 
 	// 处理图片：下载URL图片或使用本地路径
@@ -192,7 +192,7 @@ func (s *XiaohongshuService) PublishContent(ctx context.Context, req *PublishReq
 	if req.ScheduleAt != "" {
 		t, err := time.Parse(time.RFC3339, req.ScheduleAt)
 		if err != nil {
-			return nil, fmt.Errorf("定时发布时间格式错误，请使用 ISO8601 格式: %v", err)
+			return nil, fmt.Errorf("invalid schedule time, expected ISO8601 format: %v", err)
 		}
 
 		// 校验定时发布时间范围：1小时至14天
@@ -201,11 +201,11 @@ func (s *XiaohongshuService) PublishContent(ctx context.Context, req *PublishReq
 		maxTime := now.Add(14 * 24 * time.Hour)
 
 		if t.Before(minTime) {
-			return nil, fmt.Errorf("定时发布时间必须至少在1小时后，当前设置: %s，最早可选: %s",
+			return nil, fmt.Errorf("scheduled publish time must be at least 1 hour ahead, got: %s, earliest allowed: %s",
 				t.Format("2006-01-02 15:04"), minTime.Format("2006-01-02 15:04"))
 		}
 		if t.After(maxTime) {
-			return nil, fmt.Errorf("定时发布时间不能超过14天，当前设置: %s，最晚可选: %s",
+			return nil, fmt.Errorf("scheduled publish time cannot exceed 14 days, got: %s, latest allowed: %s",
 				t.Format("2006-01-02 15:04"), maxTime.Format("2006-01-02 15:04"))
 		}
 
@@ -262,15 +262,15 @@ func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohon
 func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideoRequest) (*PublishVideoResponse, error) {
 	// 标题长度校验（小红书限制：最大20个字）
 	if xhsutil.CalcTitleLength(req.Title) > 20 {
-		return nil, fmt.Errorf("标题长度超过限制")
+		return nil, fmt.Errorf("title exceeds length limit")
 	}
 
 	// 本地视频文件校验
 	if req.Video == "" {
-		return nil, fmt.Errorf("必须提供本地视频文件")
+		return nil, fmt.Errorf("local video file is required")
 	}
 	if _, err := os.Stat(req.Video); err != nil {
-		return nil, fmt.Errorf("视频文件不存在或不可访问: %v", err)
+		return nil, fmt.Errorf("video file not found or inaccessible: %v", err)
 	}
 
 	// 解析定时发布时间
@@ -278,7 +278,7 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 	if req.ScheduleAt != "" {
 		t, err := time.Parse(time.RFC3339, req.ScheduleAt)
 		if err != nil {
-			return nil, fmt.Errorf("定时发布时间格式错误，请使用 ISO8601 格式: %v", err)
+			return nil, fmt.Errorf("invalid schedule time, expected ISO8601 format: %v", err)
 		}
 
 		// 校验定时发布时间范围：1小时至14天
@@ -287,11 +287,11 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 		maxTime := now.Add(14 * 24 * time.Hour)
 
 		if t.Before(minTime) {
-			return nil, fmt.Errorf("定时发布时间必须至少在1小时后，当前设置: %s，最早可选: %s",
+			return nil, fmt.Errorf("scheduled publish time must be at least 1 hour ahead, got: %s, earliest allowed: %s",
 				t.Format("2006-01-02 15:04"), minTime.Format("2006-01-02 15:04"))
 		}
 		if t.After(maxTime) {
-			return nil, fmt.Errorf("定时发布时间不能超过14天，当前设置: %s，最晚可选: %s",
+			return nil, fmt.Errorf("scheduled publish time cannot exceed 14 days, got: %s, latest allowed: %s",
 				t.Format("2006-01-02 15:04"), maxTime.Format("2006-01-02 15:04"))
 		}
 

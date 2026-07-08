@@ -783,14 +783,14 @@ func checkPageAccessible(page *rod.Page) error {
 		"仅作者可见",
 		"因用户设置，你无法查看",
 		"因违规无法查看",
-		"请打开小红书App",         // App-only / 需扫码查看的墙 —— 单笔记级，跳过即可
+		"请打开小红书App",                 // App-only / 需扫码查看的墙 —— 单笔记级，跳过即可
 		"This Page Isn't Available", // 英文墙面同上
 	}
 
 	for _, kw := range keywords {
 		if strings.Contains(text, kw) {
 			logrus.Warnf("笔记不可访问: %s", kw)
-			return fmt.Errorf("笔记不可访问: %s", kw)
+			return fmt.Errorf("note not accessible: %s", kw)
 		}
 	}
 
@@ -798,7 +798,7 @@ func checkPageAccessible(page *rod.Page) error {
 	trimmedText := strings.TrimSpace(text)
 	if trimmedText != "" {
 		logrus.Warnf("笔记不可访问（未知原因）: %s", trimmedText)
-		return fmt.Errorf("笔记不可访问: %s", trimmedText)
+		return fmt.Errorf("note not accessible: %s", trimmedText)
 	}
 
 	return nil
@@ -826,7 +826,7 @@ func (f *FeedDetailAction) extractFeedDetail(page *rod.Page, feedID string) (*Fe
 				result = evalResult
 				return nil
 			}
-			return fmt.Errorf("无法获取初始状态数据")
+			return fmt.Errorf("failed to get initial state data")
 		},
 		retry.Attempts(3),
 		retry.Delay(200*time.Millisecond),
@@ -838,7 +838,7 @@ func (f *FeedDetailAction) extractFeedDetail(page *rod.Page, feedID string) (*Fe
 
 	if err != nil {
 		logrus.Errorf("提取Feed详情失败: %v", err)
-		return nil, fmt.Errorf("提取Feed详情失败: %w", err)
+		return nil, fmt.Errorf("failed to extract feed detail: %w", err)
 	}
 
 	if result == "" {

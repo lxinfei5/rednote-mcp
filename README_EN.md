@@ -20,25 +20,6 @@ MCP for RedNote (Xiaohongshu) platform.
 
 After checking the **Common Issues** list, if you still can't resolve your deployment problems, we strongly recommend using another tool I've created: [xpzouying/x-mcp](https://github.com/xpzouying/x-mcp). This tool doesn't require deployment - you only need a browser extension to drive your MCP, making it more user-friendly for non-technical users.
 
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=xpzouying/xiaohongshu-mcp&type=Timeline)](https://www.star-history.com/#xpzouying/xiaohongshu-mcp&Timeline)
-
-## Appreciation and Support
-
-All donations received for this project will be used for charitable giving. For all charitable donation records, please refer to [DONATIONS.md](./DONATIONS.md).
-
-**When donating, please note "MCP" and your name.**
-If you need to correct/withdraw your name attribution, please open an Issue or contact via email.
-
-**Alipay (QR code not displayed):**
-
-Donate via Alipay to **xpzouying@gmail.com**.
-
-**WeChat:**
-
-<img src="donate/wechat@2x.png" alt="WeChat Pay QR" width="260" />
-
 ## Project Overview
 
 **Main Features**
@@ -462,7 +443,7 @@ go run .
 go run . -headless=false
 ```
 
-## 1.4. Verify MCP
+### 1.4. Verify MCP
 
 ```bash
 npx @modelcontextprotocol/inspector
@@ -478,7 +459,7 @@ After running, open the red-marked link, configure MCP inspector, enter `http://
 
 After configuring MCP inspector as above, click the `List Tools` button to view all Tools.
 
-## 1.5. Use MCP for Publishing
+### 1.5. Use MCP for Publishing
 
 ### Check Login Status
 
@@ -902,6 +883,25 @@ Use xiaohongshu-mcp's video publishing feature.
 >
 > 1. WeChat group QR codes have a time limit. Sometimes I forget to update them — please wait for an update or submit an Issue to remind me.
 > 2. If a Feishu group is full, try scanning another group's QR code — there's always a spot somewhere.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xpzouying/xiaohongshu-mcp&type=Timeline)](https://www.star-history.com/#xpzouying/xiaohongshu-mcp&Timeline)
+
+## Appreciation and Support
+
+All donations received for this project will be used for charitable giving. For all charitable donation records, please refer to [DONATIONS.md](./DONATIONS.md).
+
+**When donating, please note "MCP" and your name.**
+If you need to correct/withdraw your name attribution, please open an Issue or contact via email.
+
+**Alipay (QR code not displayed):**
+
+Donate via Alipay to **xpzouying@gmail.com**.
+
+**WeChat:**
+
+<img src="donate/wechat@2x.png" alt="WeChat Pay QR" width="260" />
 
 ## 🙏 Thanks to Contributors ✨
 

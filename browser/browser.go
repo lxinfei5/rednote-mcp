@@ -133,7 +133,7 @@ func (b *Browser) NewPage() *rod.Page {
 func (b *Browser) NewPageSafe() (page *rod.Page, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("打开页面失败: %v", r)
+			err = fmt.Errorf("failed to open page: %v", r)
 			page = nil
 		}
 	}()

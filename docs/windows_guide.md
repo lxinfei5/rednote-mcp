@@ -12,7 +12,7 @@
 1. Windows 搜索框中输入 CMD
 2. 选择以管理员身份运行
 
-## 安装 Go 
+## 安装 Go
 在*命令行*中使用以下命令安装 Go (截图如下）
 <img width="762" height="164" alt="安装 Go" src="https://github.com/user-attachments/assets/621752cf-a757-41e6-9b14-45ff559537f3" />
 
@@ -31,9 +31,9 @@
 
 祝大家使用 xiaohongshu-mcp 服务愉快哦~
 
-# xiaohongshu-mcp Windows11快速搭建
+## xiaohongshu-mcp Windows11 快速搭建
 
-## 1.  下载最新构建版本
+### 1. 下载最新构建版本
 
 [github.com](https://github.com/xpzouying/xiaohongshu-mcp/releases)
 
@@ -59,7 +59,7 @@
 
 等待下载完
 
-## 2.  解决Windows 11 报病毒问题
+### 2. 解决 Windows 11 报病毒问题
 
 在运行之前的程序后会报病毒，如下图
 
@@ -103,9 +103,9 @@
 C:\Users\你的用户(当前电脑)\AppData\Local\Temp\leakless-amd64-adb80298fa6a3af7ced8b1c9b5f18007
 ```
 
-8.  . 确认添加排除项。
+8.  . 确认添加排除项。
 
-## 3.  启动程序
+### 3. 启动程序
 
 ```
 ./xiaohongshu-login-windows-amd64.exe
@@ -125,7 +125,7 @@ C:\Users\你的用户(当前电脑)\AppData\Local\Temp\leakless-amd64-adb80298fa
 
 ![](https://wdcdn.qpic.cn/MTY4ODg1NTIyMTY1ODI2NQ_66988_0r6LHv0FuL9Aidlv_1760094345?w=970&h=291&type=image/png)
 
-## 4.  MCP 验证
+### 4. MCP 验证
 
 ```
 npx @modelcontextprotocol/inspector

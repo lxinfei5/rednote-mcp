@@ -27,7 +27,7 @@ func NewPublishVideoAction(page *rod.Page) (*PublishAction, error) {
 	pp := page.Timeout(300 * time.Second)
 
 	if err := pp.Navigate(urlOfPublic); err != nil {
-		return nil, errors.Wrap(err, "导航到发布页面失败")
+		return nil, errors.Wrap(err, "navigate to publish page failed")
 	}
 
 	// 使用 WaitLoad 代替 WaitIdle（更宽松）
@@ -42,7 +42,7 @@ func NewPublishVideoAction(page *rod.Page) (*PublishAction, error) {
 	time.Sleep(1 * time.Second)
 
 	if err := mustClickPublishTab(pp, "上传视频"); err != nil {
-		return nil, errors.Wrap(err, "切换到上传视频失败")
+		return nil, errors.Wrap(err, "switch to upload video failed")
 	}
 
 	time.Sleep(1 * time.Second)
@@ -53,17 +53,17 @@ func NewPublishVideoAction(page *rod.Page) (*PublishAction, error) {
 // PublishVideo 上传视频并提交
 func (p *PublishAction) PublishVideo(ctx context.Context, content PublishVideoContent) error {
 	if content.VideoPath == "" {
-		return errors.New("视频不能为空")
+		return errors.New("video path cannot be empty")
 	}
 
 	page := p.page.Context(ctx)
 
 	if err := uploadVideo(page, content.VideoPath); err != nil {
-		return errors.Wrap(err, "小红书上传视频失败")
+		return errors.Wrap(err, "upload video to xiaohongshu failed")
 	}
 
 	if err := submitPublishVideo(page, content.Title, content.Content, content.Tags, content.ScheduleTime, content.Visibility, content.Products); err != nil {
-		return errors.Wrap(err, "小红书发布失败")
+		return errors.Wrap(err, "publish to xiaohongshu failed")
 	}
 	return nil
 }
@@ -73,7 +73,7 @@ func uploadVideo(page *rod.Page, videoPath string) error {
 	pp := page.Timeout(5 * time.Minute) // 视频处理耗时更长
 
 	if _, err := os.Stat(videoPath); os.IsNotExist(err) {
-		return errors.Wrapf(err, "视频文件不存在: %s", videoPath)
+		return errors.Wrapf(err, "video file not found: %s", videoPath)
 	}
 
 	// 寻找文件上传输入框（与图文一致的 class，或退回到 input[type=file]）
@@ -83,7 +83,7 @@ func uploadVideo(page *rod.Page, videoPath string) error {
 	if err != nil || fileInput == nil {
 		fileInput, err = pp.Element("input[type='file']")
 		if err != nil || fileInput == nil {
-			return errors.New("未找到视频上传输入框")
+			return errors.New("video upload input not found")
 		}
 	}
 
@@ -103,20 +103,20 @@ func submitPublishVideo(page *rod.Page, title, content string, tags []string, sc
 	// 标题
 	titleElem, err := page.Element("div.d-input input")
 	if err != nil {
-		return errors.Wrap(err, "查找标题输入框失败")
+		return errors.Wrap(err, "find title input failed")
 	}
 	if err := titleElem.Input(title); err != nil {
-		return errors.Wrap(err, "输入标题失败")
+		return errors.Wrap(err, "input title failed")
 	}
 	time.Sleep(1 * time.Second)
 
 	// 正文 + 标签
 	contentElem, ok := getContentElement(page)
 	if !ok {
-		return errors.New("没有找到内容输入框")
+		return errors.New("content input not found")
 	}
 	if err := contentElem.Input(content); err != nil {
-		return errors.Wrap(err, "输入正文失败")
+		return errors.Wrap(err, "input content failed")
 	}
 	if err := waitAndClickTitleInput(titleElem); err != nil {
 		return err
@@ -130,19 +130,19 @@ func submitPublishVideo(page *rod.Page, title, content string, tags []string, sc
 	// 处理定时发布
 	if scheduleTime != nil {
 		if err := setSchedulePublish(page, *scheduleTime); err != nil {
-			return errors.Wrap(err, "设置定时发布失败")
+			return errors.Wrap(err, "set scheduled publish failed")
 		}
 		slog.Info("定时发布设置完成", "schedule_time", scheduleTime.Format("2006-01-02 15:04"))
 	}
 
 	// 设置可见范围
 	if err := setVisibility(page, visibility); err != nil {
-		return errors.Wrap(err, "设置可见范围失败")
+		return errors.Wrap(err, "set visibility failed")
 	}
 
 	// 绑定商品
 	if err := bindProducts(page, products); err != nil {
-		return errors.Wrap(err, "绑定商品失败")
+		return errors.Wrap(err, "bind products failed")
 	}
 
 	if err := clickPublishButton(page); err != nil {

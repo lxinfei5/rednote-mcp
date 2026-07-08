@@ -74,7 +74,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 	if filter.SortBy != "" {
 		internal, err := findInternalOption(1, filter.SortBy)
 		if err != nil {
-			return nil, fmt.Errorf("排序依据错误: %w", err)
+			return nil, fmt.Errorf("invalid sort_by: %w", err)
 		}
 		internalFilters = append(internalFilters, internal)
 	}
@@ -83,7 +83,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 	if filter.NoteType != "" {
 		internal, err := findInternalOption(2, filter.NoteType)
 		if err != nil {
-			return nil, fmt.Errorf("笔记类型错误: %w", err)
+			return nil, fmt.Errorf("invalid note_type: %w", err)
 		}
 		internalFilters = append(internalFilters, internal)
 	}
@@ -92,7 +92,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 	if filter.PublishTime != "" {
 		internal, err := findInternalOption(3, filter.PublishTime)
 		if err != nil {
-			return nil, fmt.Errorf("发布时间错误: %w", err)
+			return nil, fmt.Errorf("invalid publish_time: %w", err)
 		}
 		internalFilters = append(internalFilters, internal)
 	}
@@ -101,7 +101,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 	if filter.SearchScope != "" {
 		internal, err := findInternalOption(4, filter.SearchScope)
 		if err != nil {
-			return nil, fmt.Errorf("搜索范围错误: %w", err)
+			return nil, fmt.Errorf("invalid search_scope: %w", err)
 		}
 		internalFilters = append(internalFilters, internal)
 	}
@@ -110,7 +110,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 	if filter.Location != "" {
 		internal, err := findInternalOption(5, filter.Location)
 		if err != nil {
-			return nil, fmt.Errorf("位置距离错误: %w", err)
+			return nil, fmt.Errorf("invalid location: %w", err)
 		}
 		internalFilters = append(internalFilters, internal)
 	}
@@ -122,7 +122,7 @@ func convertToInternalFilters(filter FilterOption) ([]internalFilterOption, erro
 func findInternalOption(filtersIndex int, text string) (internalFilterOption, error) {
 	options, exists := filterOptionsMap[filtersIndex]
 	if !exists {
-		return internalFilterOption{}, fmt.Errorf("筛选组 %d 不存在", filtersIndex)
+		return internalFilterOption{}, fmt.Errorf("filter group %d does not exist", filtersIndex)
 	}
 
 	for _, option := range options {
@@ -131,24 +131,24 @@ func findInternalOption(filtersIndex int, text string) (internalFilterOption, er
 		}
 	}
 
-	return internalFilterOption{}, fmt.Errorf("在筛选组 %d 中未找到文本 '%s'", filtersIndex, text)
+	return internalFilterOption{}, fmt.Errorf("filter group %d does not contain text '%s'", filtersIndex, text)
 }
 
 // validateInternalFilterOption 验证内部筛选选项是否在有效范围内
 func validateInternalFilterOption(filter internalFilterOption) error {
 	// 检查筛选组索引是否有效
 	if filter.FiltersIndex < 1 || filter.FiltersIndex > 5 {
-		return fmt.Errorf("无效的筛选组索引 %d，有效范围为 1-5", filter.FiltersIndex)
+		return fmt.Errorf("invalid filter group index %d, valid range is 1-5", filter.FiltersIndex)
 	}
 
 	// 检查标签索引是否在对应筛选组的有效范围内
 	options, exists := filterOptionsMap[filter.FiltersIndex]
 	if !exists {
-		return fmt.Errorf("筛选组 %d 不存在", filter.FiltersIndex)
+		return fmt.Errorf("filter group %d does not exist", filter.FiltersIndex)
 	}
 
 	if filter.TagsIndex < 1 || filter.TagsIndex > len(options) {
-		return fmt.Errorf("筛选组 %d 的标签索引 %d 超出范围，有效范围为 1-%d",
+		return fmt.Errorf("filter group %d tag index %d out of range, valid range is 1-%d",
 			filter.FiltersIndex, filter.TagsIndex, len(options))
 	}
 
@@ -183,7 +183,7 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 		for _, filter := range filters {
 			internalFilters, err := convertToInternalFilters(filter)
 			if err != nil {
-				return nil, fmt.Errorf("筛选选项转换失败: %w", err)
+				return nil, fmt.Errorf("failed to convert filter options: %w", err)
 			}
 			allInternalFilters = append(allInternalFilters, internalFilters...)
 		}
@@ -191,7 +191,7 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 		// 验证所有内部筛选选项
 		for _, filter := range allInternalFilters {
 			if err := validateInternalFilterOption(filter); err != nil {
-				return nil, fmt.Errorf("筛选选项验证失败: %w", err)
+				return nil, fmt.Errorf("failed to validate filter options: %w", err)
 			}
 		}
 

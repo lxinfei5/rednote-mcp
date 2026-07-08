@@ -41,23 +41,23 @@ func (f *CommentFeedAction) PostComment(ctx context.Context, feedID, xsecToken, 
 	elem, err := page.Element("div.input-box div.content-edit span")
 	if err != nil {
 		logrus.Warnf("Failed to find comment input box: %v", err)
-		return fmt.Errorf("未找到评论输入框，该帖子可能不支持评论或网页端不可访问: %w", err)
+		return fmt.Errorf("comment input box not found, post may not allow comments or is inaccessible on web: %w", err)
 	}
 
 	if err := elem.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		logrus.Warnf("Failed to click comment input box: %v", err)
-		return fmt.Errorf("无法点击评论输入框: %w", err)
+		return fmt.Errorf("failed to click comment input box: %w", err)
 	}
 
 	elem2, err := page.Element("div.input-box div.content-edit p.content-input")
 	if err != nil {
 		logrus.Warnf("Failed to find comment input field: %v", err)
-		return fmt.Errorf("未找到评论输入区域: %w", err)
+		return fmt.Errorf("comment input field not found: %w", err)
 	}
 
 	if err := elem2.Input(content); err != nil {
 		logrus.Warnf("Failed to input comment content: %v", err)
-		return fmt.Errorf("无法输入评论内容: %w", err)
+		return fmt.Errorf("failed to input comment content: %w", err)
 	}
 
 	// 提交前加入随机停顿，模拟真人斟酌，避免固定 1s 节奏
@@ -66,12 +66,12 @@ func (f *CommentFeedAction) PostComment(ctx context.Context, feedID, xsecToken, 
 	submitButton, err := page.Element("div.bottom button.submit")
 	if err != nil {
 		logrus.Warnf("Failed to find submit button: %v", err)
-		return fmt.Errorf("未找到提交按钮: %w", err)
+		return fmt.Errorf("submit button not found: %w", err)
 	}
 
 	if err := submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
 		logrus.Warnf("Failed to click submit button: %v", err)
-		return fmt.Errorf("无法点击提交按钮: %w", err)
+		return fmt.Errorf("failed to click submit button: %w", err)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -104,7 +104,7 @@ func (f *CommentFeedAction) ReplyToComment(ctx context.Context, feedID, xsecToke
 	// 使用 Go 实现的查找逻辑
 	commentEl, err := findCommentElement(page, commentID, userID)
 	if err != nil {
-		return fmt.Errorf("无法找到评论: %w", err)
+		return fmt.Errorf("failed to find comment: %w", err)
 	}
 
 	// 滚动到评论位置
@@ -117,11 +117,11 @@ func (f *CommentFeedAction) ReplyToComment(ctx context.Context, feedID, xsecToke
 	// 查找并点击回复按钮
 	replyBtn, err := commentEl.Element(".right .interactions .reply")
 	if err != nil {
-		return fmt.Errorf("无法找到回复按钮: %w", err)
+		return fmt.Errorf("failed to find reply button: %w", err)
 	}
 
 	if err := replyBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return fmt.Errorf("点击回复按钮失败: %w", err)
+		return fmt.Errorf("failed to click reply button: %w", err)
 	}
 
 	time.Sleep(1 * time.Second)
@@ -129,12 +129,12 @@ func (f *CommentFeedAction) ReplyToComment(ctx context.Context, feedID, xsecToke
 	// 查找回复输入框
 	inputEl, err := page.Element("div.input-box div.content-edit p.content-input")
 	if err != nil {
-		return fmt.Errorf("无法找到回复输入框: %w", err)
+		return fmt.Errorf("failed to find reply input box: %w", err)
 	}
 
 	// 输入内容
 	if err := inputEl.Input(content); err != nil {
-		return fmt.Errorf("输入回复内容失败: %w", err)
+		return fmt.Errorf("failed to input reply content: %w", err)
 	}
 
 	// 提交前加入随机停顿，模拟真人斟酌
@@ -143,11 +143,11 @@ func (f *CommentFeedAction) ReplyToComment(ctx context.Context, feedID, xsecToke
 	// 查找并点击提交按钮
 	submitBtn, err := page.Element("div.bottom button.submit")
 	if err != nil {
-		return fmt.Errorf("无法找到提交按钮: %w", err)
+		return fmt.Errorf("failed to find submit button: %w", err)
 	}
 
 	if err := submitBtn.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return fmt.Errorf("点击提交按钮失败: %w", err)
+		return fmt.Errorf("failed to click submit button: %w", err)
 	}
 
 	time.Sleep(2 * time.Second)
@@ -271,5 +271,5 @@ func findCommentElement(page *rod.Page, commentID, userID string) (*rod.Element,
 		time.Sleep(scrollInterval)
 	}
 
-	return nil, fmt.Errorf("未找到评论 (commentID: %s, userID: %s), 尝试次数: %d", commentID, userID, maxAttempts)
+	return nil, fmt.Errorf("comment not found (commentID: %s, userID: %s), attempts: %d", commentID, userID, maxAttempts)
 }

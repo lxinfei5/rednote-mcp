@@ -36,11 +36,13 @@ const (
 // Pacing / concurrency — env-tunable so the operator can dial 抓取节奏 WITHOUT rebuilding the binary.
 // This is "slow down, but NEVER stop": there is no cooldown/budget/gate anywhere — a walled note is a
 // per-note skip, never a global stop (per user decision 2026-07-08: the wall is transient/per-post).
-//   XHS_MAX_CONCURRENT_TABS  default 1   — serialize one tab at a time on the single 子账号. Clamped to
-//                                          >=1 (0 would deadlock the unbuffered semaphore).
-//   XHS_MIN_GAP_MS           default 800 — base floor between op-STARTS.
-//   XHS_GAP_JITTER_MS        default 800 — uniform random added to the floor, so the cadence is
-//                                          non-deterministic (a fixed metronome is itself a bot signal).
+//
+//	XHS_MAX_CONCURRENT_TABS  default 1   — serialize one tab at a time on the single 子账号. Clamped to
+//	                                       >=1 (0 would deadlock the unbuffered semaphore).
+//	XHS_MIN_GAP_MS           default 800 — base floor between op-STARTS.
+//	XHS_GAP_JITTER_MS        default 800 — uniform random added to the floor, so the cadence is
+//	                                       non-deterministic (a fixed metronome is itself a bot signal).
+//
 // => successive read ops start ~0.8–1.6s apart. Retune live via env, no rebuild.
 var (
 	maxConcurrentTabs = atLeast(envInt("XHS_MAX_CONCURRENT_TABS", 1), 1)
@@ -181,7 +183,7 @@ func (p *browserPool) ensureBrowserLocked() (*browser.Browser, error) {
 func (p *browserPool) healthCheckLocked(b *browser.Browser) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("browser 健康检查失败: %v", r)
+			err = fmt.Errorf("browser health check failed: %v", r)
 		}
 	}()
 	page, err := b.NewPageSafe()
@@ -393,7 +395,7 @@ func withSharedPageCtx(ctx context.Context, class tabTimeoutClass, fn func(page 
 		defer func() {
 			if r := recover(); r != nil {
 				// Must* API panic 转 error 返回
-				resultCh <- execResult{err: fmt.Errorf("rod 操作 panic: %v", r)}
+				resultCh <- execResult{err: fmt.Errorf("rod operation panic: %v", r)}
 			}
 		}()
 		// 仍尝试传 context（对非 Must 路径有帮助）

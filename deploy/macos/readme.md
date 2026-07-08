@@ -1,10 +1,10 @@
-## 后台运行小红书 MCP 的解决方案 - Mac 端
+# 后台运行小红书 MCP 的解决方案 - Mac 端
 
 通过此方法你可以：通过系统进程管理小红书 MCP
 
-### 快速开始
+## 快速开始
 
-#### 1. 安装配置
+### 1. 安装配置
 
 1. 打开当前目录下 xhsmcp.plist
    1. 必须：替换 {二进制路径} 为你的小红书 MCP 二进制路径
@@ -19,7 +19,7 @@
 
 至此就完成了配置安装
 
-#### 2. 使用配置
+### 2. 使用配置
 
 启动小红书 MCP 服务
 
@@ -39,11 +39,11 @@ launchctl stop xhsmcp
 launchctl list | grep xhsmcp
 ```
 
-### Shell 脚本管理 （进阶用法）
+## Shell 脚本管理（进阶用法）
 
 如果你使用 fish shell，可以安装该目录下的 xhsmcp.fish，实现类似这样的效果：
 
-``` bash
+```bash
 ~/home
 > launchctl list | grep 
 

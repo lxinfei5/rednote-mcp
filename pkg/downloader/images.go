@@ -67,7 +67,7 @@ func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error
 	}
 	for _, ip := range ips {
 		if ipBlocked(ip.IP) {
-			return nil, fmt.Errorf("拒绝连接内部地址: %s", ip.IP)
+			return nil, fmt.Errorf("refused connection to internal address: %s", ip.IP)
 		}
 	}
 

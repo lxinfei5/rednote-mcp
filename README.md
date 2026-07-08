@@ -10,49 +10,30 @@
 
 MCP for 小红书 / xiaohongshu.com。让你的 AI 助手直接访问小红书数据。
 
-### 🚀 快速开始：选择最适合你的版本
+## 选择适合你的版本
 
 > [!IMPORTANT]
-> #### 🔥 方案 A：Openclaw 深度集成 (推荐给开发者)
-> - **Openclaw 太火啦 🔥🔥🔥 ，新增 Openclaw 支持，分为两种，请各位按需使用：**
+> #### 方案 A：Openclaw 深度集成（推荐给开发者）
+> - **已支持 Openclaw 集成，分为两种，请按需选择：**
 > - [xiaohongshu-mcp-skills](https://github.com/autoclaw-cc/xiaohongshu-mcp-skills)（适用于已部署完本项目的用户）
 > - [xiaohongshu-skills](https://github.com/autoclaw-cc/xiaohongshu-skills)（开箱即用版）
 
 > [!TIP]
-> #### ✨ 方案 B：x-mcp 浏览器插件版 (推荐给非技术同学 / 追求极简的用户)
+> #### 方案 B：x-mcp 浏览器插件版（推荐给非技术用户 / 追求极简的用户）
 > - **不想折腾 Docker 或部署环境？试试：[xpzouying/x-mcp](https://github.com/xpzouying/x-mcp)**
 > - **零配置**：安装插件即用，无需任何代码、代理或复杂的环境配置。
 > - **安全稳定**：直接在常用浏览器 (Chrome/Edge) 及本地网络运行，无服务器 IP 风险，且能解决 90% 的部署报错。
 
-### 📖 相关资源
+## 相关资源
 
 - **我的博客文章**：[haha.ai/xiaohongshu-mcp](https://www.haha.ai/xiaohongshu-mcp)
 - **贡献指南**：[Contributing Guide](./CONTRIBUTING.md)
 
-### 🛠️ 疑难杂症
+## 疑难杂症
 
 如果您在部署传统 Docker 版本时遇到问题，**务必先查看：[各种疑难杂症 (Issues #56)](https://github.com/xpzouying/xiaohongshu-mcp/issues/56)**。
 
 > *提示：如果环境排查太耗时，切换到 [x-mcp 插件版](https://github.com/xpzouying/x-mcp) 通常是更高效的选择。*
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=xpzouying/xiaohongshu-mcp&type=Timeline)](https://www.star-history.com/#xpzouying/xiaohongshu-mcp&Timeline)
-
-## 赞赏支持
-
-本项目所有的赞赏都会用于慈善捐赠。所有的慈善捐赠记录，请参考 [DONATIONS.md](./DONATIONS.md)。
-
-**捐赠时，请备注 MCP 以及名字。**
-如需更正/撤回署名，请开 Issue 或通过邮箱联系。
-
-**支付宝（不展示二维码）：**
-
-通过支付宝向 **xpzouying@gmail.com** 赞赏。
-
-**微信：**
-
-<img src="donate/wechat@2x.png" alt="WeChat Pay QR" width="260" />
 
 ## 项目简介
 
@@ -493,7 +474,7 @@ XHS_PROXY=http://proxy:port go run .
 
 支持 HTTP/HTTPS/SOCKS5 代理，日志中会自动隐藏代理的认证信息。
 
-## 1.4. 验证 MCP
+### 1.4. 验证 MCP
 
 ```bash
 npx @modelcontextprotocol/inspector
@@ -509,7 +490,7 @@ npx @modelcontextprotocol/inspector
 
 按照上面配置 MCP inspector 后，点击 `List Tools` 按钮，查看所有的 Tools。
 
-## 1.5. 使用 MCP 发布
+### 1.5. 使用 MCP 发布
 
 ### 检查登录状态
 
@@ -1011,6 +992,25 @@ npx mcporter list xiaohongshu-mcp
 >
 > 1. 微信群的二维码有时间限制，有时候忘记更新，麻烦等待更新或者提交 Issue 催我更新。
 > 2. 飞书群，如果有的群满了，可以尝试扫一下另外一个群，总有坑位。
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=xpzouying/xiaohongshu-mcp&type=Timeline)](https://www.star-history.com/#xpzouying/xiaohongshu-mcp&Timeline)
+
+## 赞赏支持
+
+本项目所有的赞赏都会用于慈善捐赠。所有的慈善捐赠记录，请参考 [DONATIONS.md](./DONATIONS.md)。
+
+**捐赠时，请备注 MCP 以及名字。**
+如需更正/撤回署名，请开 Issue 或通过邮箱联系。
+
+**支付宝（不展示二维码）：**
+
+通过支付宝向 **xpzouying@gmail.com** 赞赏。
+
+**微信：**
+
+<img src="donate/wechat@2x.png" alt="WeChat Pay QR" width="260" />
 
 ## 🙏 致谢贡献者 ✨
 

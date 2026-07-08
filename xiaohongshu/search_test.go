@@ -91,7 +91,7 @@ func TestFilterValidation(t *testing.T) {
 	}
 	_, err = convertToInternalFilters(invalidFilter)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "未找到文本")
+	require.Contains(t, err.Error(), "does not contain text")
 
 	// 测试所有有效的筛选选项
 	allFilters := FilterOption{
