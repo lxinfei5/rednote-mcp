@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,17 +18,56 @@ import (
 )
 
 const (
-	maxConcurrentTabs    = 3
-	minInterOpGap        = 800 * time.Millisecond
 	closeBrowserTimeout  = 5 * time.Second
 	tabTimeoutRead       = 30 * time.Second
 	tabTimeoutReadLong   = 3 * time.Minute
 	tabTimeoutWrite      = 5 * time.Minute
 	tabTimeoutWriteVideo = 10 * time.Minute
 
+	// openPageTimeout 兜住"开 tab"阶段本身。历史 bug：openPage()/NewPageSafe() 在硬超时 timer 之外、
+	// 且持 lifecycleMu 同步执行——一旦 Chrome/Rod 在开页时卡死，会无限挂起并连带冻结整个 pool（含本该自愈
+	// 的重建路径）。这个界把"无限挂起"降级为"有界失败+重建"，直接满足"不能卡死"。
+	openPageTimeout = 15 * time.Second
+
 	// 连续超时阈值：达到后强制重建浏览器，避免挂起拖死服务
 	consecutiveTimeoutThreshold = 2
 )
+
+// Pacing / concurrency — env-tunable so the operator can dial 抓取节奏 WITHOUT rebuilding the binary.
+// This is "slow down, but NEVER stop": there is no cooldown/budget/gate anywhere — a walled note is a
+// per-note skip, never a global stop (per user decision 2026-07-08: the wall is transient/per-post).
+//   XHS_MAX_CONCURRENT_TABS  default 1   — serialize one tab at a time on the single 子账号. Clamped to
+//                                          >=1 (0 would deadlock the unbuffered semaphore).
+//   XHS_MIN_GAP_MS           default 800 — base floor between op-STARTS.
+//   XHS_GAP_JITTER_MS        default 800 — uniform random added to the floor, so the cadence is
+//                                          non-deterministic (a fixed metronome is itself a bot signal).
+// => successive read ops start ~0.8–1.6s apart. Retune live via env, no rebuild.
+var (
+	maxConcurrentTabs = atLeast(envInt("XHS_MAX_CONCURRENT_TABS", 1), 1)
+	minInterOpGap     = time.Duration(envInt("XHS_MIN_GAP_MS", 800)) * time.Millisecond
+	gapJitter         = time.Duration(envInt("XHS_GAP_JITTER_MS", 800)) * time.Millisecond
+)
+
+// envInt reads a non-negative int from env, falling back to def on missing/blank/invalid/negative.
+func envInt(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		logrus.Warnf("env %s=%q invalid (want non-negative int); using default %d", key, v, def)
+		return def
+	}
+	return n
+}
+
+func atLeast(n, lo int) int {
+	if n < lo {
+		return lo
+	}
+	return n
+}
 
 // slotWaitTimeout 等槽位最长时间，测试可临时改小。
 var slotWaitTimeout = 60 * time.Second
@@ -115,8 +157,13 @@ func (p *browserPool) releaseSlot() {
 func (p *browserPool) pace() {
 	p.paceMu.Lock()
 	defer p.paceMu.Unlock()
-	if gap := time.Since(p.lastPageOp); gap < minInterOpGap {
-		time.Sleep(minInterOpGap - gap)
+	// Randomized target = base floor + uniform jitter, so op-starts are both slower AND non-deterministic.
+	target := minInterOpGap
+	if gapJitter > 0 {
+		target += time.Duration(rand.Int63n(int64(gapJitter) + 1))
+	}
+	if gap := time.Since(p.lastPageOp); gap < target {
+		time.Sleep(target - gap)
 	}
 	p.lastPageOp = time.Now()
 }
@@ -221,6 +268,42 @@ func (p *browserPool) noteSuccess() {
 	}
 }
 
+// callWithTimeout 在独立 goroutine 里跑 fn 并用 timer 兜底：即便 fn（如卡死的 Chrome 开页）永不返回，
+// 调用方也必定在 timeout 后拿到 ErrTabTimeout 返回。卡住的 goroutine 被丢弃——它不持有任何 pool 锁，
+// 晚到的 page 会随后续 browser 重建一起被销毁，不会泄漏进 pool。fn 内的 Must* panic 被 recover 成 error。
+func callWithTimeout(timeout time.Duration, fn func() (*rod.Page, error)) (*rod.Page, error) {
+	type res struct {
+		page *rod.Page
+		err  error
+	}
+	ch := make(chan res, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				ch <- res{nil, fmt.Errorf("page-open panic: %v", r)}
+			}
+		}()
+		pg, e := fn()
+		ch <- res{pg, e}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case r := <-ch:
+		return r.page, r.err
+	case <-timer.C:
+		return nil, fmt.Errorf("%w: page-open exceeded %v", ErrTabTimeout, timeout)
+	}
+}
+
+// newPageSafeBounded 给 b.NewPageSafe() 套上 openPageTimeout 硬界，杜绝开页阶段无限挂起。
+func newPageSafeBounded(b *browser.Browser) (*rod.Page, error) {
+	return callWithTimeout(openPageTimeout, func() (*rod.Page, error) {
+		return b.NewPageSafe()
+	})
+}
+
 func (p *browserPool) openPage() (page *rod.Page, err error) {
 	p.lifecycleMu.Lock()
 	defer p.lifecycleMu.Unlock()
@@ -230,12 +313,14 @@ func (p *browserPool) openPage() (page *rod.Page, err error) {
 		return nil, err
 	}
 
-	page, err = b.NewPageSafe()
+	page, err = newPageSafeBounded(b)
 	if err != nil {
-		if !isConnDeadErr(err) {
+		// 死连接(EOF/session lost) 或 开页硬超时(browser 卡死) 都视为 browser 不健康：重建一次再试。
+		// 关键：newPageSafeBounded 保证这里必定有界返回，重建路径不会被一个永不返回的 NewPageSafe 堵死。
+		if !isConnDeadErr(err) && !isTabTimeoutErr(err) {
 			return nil, err
 		}
-		logrus.Warnf("打开页面失败，尝试重建常驻浏览器: %v", err)
+		logrus.Warnf("打开页面失败/超时，尝试重建常驻浏览器: %v", err)
 		p.closeLongLivedPages()
 		p.closeConnLocked(p.conn)
 		p.conn = nil
@@ -245,7 +330,7 @@ func (p *browserPool) openPage() (page *rod.Page, err error) {
 		if err != nil {
 			return nil, err
 		}
-		page, err = b.NewPageSafe()
+		page, err = newPageSafeBounded(b)
 		if err != nil {
 			p.closeConnLocked(p.conn)
 			p.conn = nil
@@ -261,7 +346,7 @@ func releasePageInflight() {
 	sharedPool.decInflight()
 }
 
-// withSharedPageCtx 在常驻 browser 上开 tab 执行 fn；最多 3 个 tab 并发，fn 在窄锁外执行。
+// withSharedPageCtx 在常驻 browser 上开 tab 执行 fn；最多 2 个 tab 并发，fn 在窄锁外执行。
 // 多层硬超时保护：
 // - 软超时：context 传给 page（部分非 Must* 有效）
 // - 硬超时：goroutine + timer 兜底，Must* 卡死也必定返回 ErrTabTimeout
@@ -377,7 +462,7 @@ func isTabTimeoutErr(err error) bool {
 	return strings.Contains(s, "hard-timeout")
 }
 
-// acquireLongLivedPage 开 long-lived tab（扫码登录等），不占 3 槽位并发额度。
+// acquireLongLivedPage 开 long-lived tab（扫码登录等），不占 2 槽位并发额度。
 func acquireLongLivedPage(ctx context.Context) (page *rod.Page, err error) {
 	if ctx == nil {
 		ctx = context.Background()

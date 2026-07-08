@@ -357,9 +357,6 @@ func (s *XiaohongshuService) ListFeeds(ctx context.Context) (*FeedsListResponse,
 }
 
 func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, filters ...xiaohongshu.FilterOption) (*FeedsListResponse, error) {
-	if err := xhsGateCheck("search_feeds"); err != nil {
-		return nil, err
-	}
 	var feeds []xiaohongshu.Feed
 	if err := withSharedPageCtx(ctx, tabRead, func(page *rod.Page) error {
 		action := xiaohongshu.NewSearchAction(page)
@@ -367,13 +364,7 @@ func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, fi
 		feeds, err = action.Search(ctx, keyword, filters...)
 		return err
 	}); err != nil {
-		// Browser-infra errors (Chrome crash, Rod session loss, page open failure)
-		// do NOT trigger cooldown — they are local transient faults, not XHS risk signals.
 		return nil, err
-	}
-	// Only inspect the RESULT for real XHS risk-control markers (扫码/验证码/操作频繁…).
-	if blob, err := json.Marshal(feeds); err == nil {
-		xhsMarkRisk("search_feeds", string(blob))
 	}
 	return &FeedsListResponse{
 		Feeds: feeds,
@@ -388,9 +379,6 @@ func (s *XiaohongshuService) GetFeedDetail(ctx context.Context, feedID, xsecToke
 
 // GetFeedDetailWithConfig 使用配置获取Feed详情
 func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config xiaohongshu.CommentLoadConfig) (*FeedDetailResponse, error) {
-	if err := xhsGateCheck("get_feed_detail"); err != nil {
-		return nil, err
-	}
 	var result *xiaohongshu.FeedDetailResponse
 	tabClass := tabRead
 	if loadAllComments {
@@ -402,14 +390,9 @@ func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID
 		result, err = action.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, config)
 		return err
 	}); err != nil {
-		// Browser-infra errors do NOT trigger cooldown — see SearchFeeds comment.
+		// A walled/unavailable note ("请打开小红书App扫码查看 / This Page Isn't Available") is PER-NOTE:
+		// it surfaces as an error, the caller skips this note and moves on — no global stop.
 		return nil, err
-	}
-	// Only inspect the RESULT for real XHS risk-control markers.
-	if result != nil {
-		if blob, err := json.Marshal(result); err == nil {
-			xhsMarkRisk("get_feed_detail", string(blob))
-		}
 	}
 	return &FeedDetailResponse{
 		FeedID: feedID,

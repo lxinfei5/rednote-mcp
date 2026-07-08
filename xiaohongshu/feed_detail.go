@@ -770,7 +770,8 @@ func checkPageAccessible(page *rod.Page) error {
 		return nil
 	}
 
-	// 检查关键词
+	// 检查关键词。注意：这些都是【单笔记级】不可访问，返回 error 让调用方跳过这一条、继续下一条——
+	// 绝不做任何全局熔断/冷却（风控墙是跟着具体帖子的，换一条即可正常加载）。
 	keywords := []string{
 		"当前笔记暂时无法浏览",
 		"该内容因违规已被删除",
@@ -782,6 +783,8 @@ func checkPageAccessible(page *rod.Page) error {
 		"仅作者可见",
 		"因用户设置，你无法查看",
 		"因违规无法查看",
+		"请打开小红书App",         // App-only / 需扫码查看的墙 —— 单笔记级，跳过即可
+		"This Page Isn't Available", // 英文墙面同上
 	}
 
 	for _, kw := range keywords {
