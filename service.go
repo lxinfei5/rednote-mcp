@@ -168,24 +168,24 @@ func (s *XiaohongshuService) SearchFeeds(ctx context.Context, keyword string, fi
 	return response, nil
 }
 
-// GetFeedDetail 获取Feed详情
-func (s *XiaohongshuService) GetFeedDetail(ctx context.Context, feedID, xsecToken string, loadAllComments bool) (*FeedDetailResponse, error) {
-	return s.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, xiaohongshu.DefaultCommentLoadConfig())
+// GetFeedDetail 获取笔记详情。
+func (s *XiaohongshuService) GetFeedDetail(ctx context.Context, noteID, xsecToken string, loadAllComments bool) (*FeedDetailResponse, error) {
+	return s.GetFeedDetailWithConfig(ctx, noteID, xsecToken, loadAllComments, xiaohongshu.DefaultCommentLoadConfig())
 }
 
-// GetFeedDetailWithConfig 使用配置获取Feed详情
-func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config xiaohongshu.CommentLoadConfig) (*FeedDetailResponse, error) {
+// GetFeedDetailWithConfig 使用配置获取笔记详情。
+func (s *XiaohongshuService) GetFeedDetailWithConfig(ctx context.Context, noteID, xsecToken string, loadAllComments bool, config xiaohongshu.CommentLoadConfig) (*FeedDetailResponse, error) {
 	var response *FeedDetailResponse
 	err := s.browser.Do(func(page playwright.Page) error {
 		action := xiaohongshu.NewFeedDetailAction(page)
 
-		result, err := action.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, config)
+		result, err := action.GetFeedDetailWithConfig(ctx, noteID, xsecToken, loadAllComments, config)
 		if err != nil {
 			return err
 		}
 
 		response = &FeedDetailResponse{
-			FeedID: feedID,
+			NoteID: noteID,
 			Data:   result,
 		}
 		return nil

@@ -166,9 +166,16 @@ func (s *AppServer) handleSearchFeeds(ctx context.Context, args SearchFeedsArgs)
 func (s *AppServer) handleGetFeedDetail(ctx context.Context, args FeedDetailArgs) *MCPToolResult {
 	logrus.Info("MCP: 获取Feed详情")
 
-	if args.FeedID == "" {
+	noteID, err := canonicalNoteID(args.NoteID, args.LegacyFeedID)
+	if err != nil {
 		return &MCPToolResult{
-			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: 缺少feed_id参数"}},
+			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: " + err.Error()}},
+			IsError: true,
+		}
+	}
+	if noteID == "" {
+		return &MCPToolResult{
+			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: 缺少note_id参数"}},
 			IsError: true,
 		}
 	}
@@ -194,9 +201,9 @@ func (s *AppServer) handleGetFeedDetail(ctx context.Context, args FeedDetailArgs
 		}
 	}
 
-	logrus.Infof("MCP: 获取Feed详情 - Feed ID: %s, loadAllComments=%v, config=%+v", args.FeedID, args.LoadAllComments, config)
+	logrus.Infof("MCP: 获取Feed详情 - Note ID: %s, loadAllComments=%v, config=%+v", noteID, args.LoadAllComments, config)
 
-	result, err := s.xiaohongshuService.GetFeedDetailWithConfig(ctx, args.FeedID, args.XsecToken, args.LoadAllComments, config)
+	result, err := s.xiaohongshuService.GetFeedDetailWithConfig(ctx, noteID, args.XsecToken, args.LoadAllComments, config)
 	if err != nil {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: " + err.Error()}},

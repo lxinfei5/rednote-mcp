@@ -8,10 +8,11 @@ type SearchFeedsArgs struct {
 	Filters xiaohongshu.FilterOption `json:"filters,omitempty" jsonschema:"筛选选项"`
 }
 
-// FeedDetailArgs 获取 Feed 详情的参数。
+// FeedDetailArgs 获取笔记详情的参数。
 type FeedDetailArgs struct {
-	FeedID           string `json:"feed_id" jsonschema:"小红书笔记 ID，从 Feed 列表获取"`
-	XsecToken        string `json:"xsec_token" jsonschema:"访问令牌，从 Feed 列表的 xsecToken 字段获取"`
+	NoteID           string `json:"note_id,omitempty" jsonschema:"小红书笔记 ID，从笔记列表的 note_id 字段获取；新调用必填"`
+	LegacyFeedID     string `json:"feed_id,omitempty" jsonschema:"旧版调用使用的笔记 ID 参数；新调用请使用 note_id"`
+	XsecToken        string `json:"xsec_token" jsonschema:"访问令牌，从笔记列表的 xsec_token 字段获取"`
 	LoadAllComments  bool   `json:"load_all_comments,omitempty" jsonschema:"是否加载全部评论。false 仅返回前 10 条一级评论（默认），true 滚动加载更多评论"`
 	Limit            int    `json:"limit,omitempty" jsonschema:"仅当 load_all_comments 为 true 时生效，限制加载的一级评论数量，默认 20"`
 	ClickMoreReplies bool   `json:"click_more_replies,omitempty" jsonschema:"仅当 load_all_comments 为 true 时生效，是否展开二级回复"`
@@ -22,7 +23,7 @@ type FeedDetailArgs struct {
 // UserProfileArgs 获取用户主页的参数。
 type UserProfileArgs struct {
 	UserID    string `json:"user_id" jsonschema:"小红书用户 ID，从 Feed 列表获取"`
-	XsecToken string `json:"xsec_token" jsonschema:"访问令牌，从 Feed 列表的 xsecToken 字段获取"`
+	XsecToken string `json:"xsec_token" jsonschema:"访问令牌，从笔记列表的 xsec_token 字段获取"`
 	Tab       string `json:"tab,omitempty" jsonschema:"主页 tab：note（笔记，默认）、fav（收藏）或 liked（点赞）"`
 }
 

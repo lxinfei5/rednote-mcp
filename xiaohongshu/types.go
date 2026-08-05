@@ -19,13 +19,42 @@ type FeedsValue struct {
 	Value []Feed `json:"_value"`
 }
 
-// Feed 表示单个 Feed 项目
+// Feed 表示单个笔记卡片。
+//
+// 对外统一使用 note_id 和 xsec_token；小红书页面原始数据里的 id 和
+// xsecToken 由 UnmarshalJSON 兼容转换。
 type Feed struct {
-	XsecToken string   `json:"xsecToken"`
-	ID        string   `json:"id"`
+	XsecToken string   `json:"xsec_token"`
+	NoteID    string   `json:"note_id"`
 	ModelType string   `json:"modelType"`
 	NoteCard  NoteCard `json:"noteCard"`
 	Index     int      `json:"index"`
+}
+
+// UnmarshalJSON 兼容小红书页面返回的原始字段名。
+func (f *Feed) UnmarshalJSON(data []byte) error {
+	type feedAlias Feed
+	var decoded feedAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	var legacy struct {
+		ID        string `json:"id"`
+		XsecToken string `json:"xsecToken"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	if decoded.NoteID == "" {
+		decoded.NoteID = legacy.ID
+	}
+	if decoded.XsecToken == "" {
+		decoded.XsecToken = legacy.XsecToken
+	}
+
+	*f = Feed(decoded)
+	return nil
 }
 
 // modelTypeNote 笔记条目的 modelType 取值。
@@ -115,8 +144,8 @@ type FeedDetailResponse struct {
 
 // FeedDetail 表示详情页的笔记内容
 type FeedDetail struct {
-	NoteID       string            `json:"noteId"`
-	XsecToken    string            `json:"xsecToken"`
+	NoteID       string            `json:"note_id"`
+	XsecToken    string            `json:"xsec_token"`
 	Title        string            `json:"title"`
 	Desc         string            `json:"desc"`
 	Type         string            `json:"type"`
@@ -126,6 +155,32 @@ type FeedDetail struct {
 	InteractInfo InteractInfo      `json:"interactInfo"`
 	ImageList    []DetailImageInfo `json:"imageList"`
 	Video        *VideoDetail      `json:"video,omitempty"` // 视频笔记才有，图文笔记为 nil
+}
+
+// UnmarshalJSON 兼容小红书详情页返回的原始字段名。
+func (f *FeedDetail) UnmarshalJSON(data []byte) error {
+	type feedDetailAlias FeedDetail
+	var decoded feedDetailAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	var legacy struct {
+		NoteID    string `json:"noteId"`
+		XsecToken string `json:"xsecToken"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	if decoded.NoteID == "" {
+		decoded.NoteID = legacy.NoteID
+	}
+	if decoded.XsecToken == "" {
+		decoded.XsecToken = legacy.XsecToken
+	}
+
+	*f = FeedDetail(decoded)
+	return nil
 }
 
 // VideoDetail 详情页的视频信息，按页面 note.video 原样映射，不替调用方挑档位。
@@ -256,7 +311,7 @@ type CommentList struct {
 // Comment 表示单条评论
 type Comment struct {
 	ID              string    `json:"id"`
-	NoteID          string    `json:"noteId"`
+	NoteID          string    `json:"note_id"`
 	Content         string    `json:"content"`
 	LikeCount       string    `json:"likeCount"`
 	CreateTime      int64     `json:"createTime"`
@@ -266,6 +321,28 @@ type Comment struct {
 	SubCommentCount string    `json:"subCommentCount"`
 	SubComments     []Comment `json:"subComments"`
 	ShowTags        []string  `json:"showTags"`
+}
+
+// UnmarshalJSON 兼容小红书评论数据里的 noteId 字段。
+func (c *Comment) UnmarshalJSON(data []byte) error {
+	type commentAlias Comment
+	var decoded commentAlias
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+
+	var legacy struct {
+		NoteID string `json:"noteId"`
+	}
+	if err := json.Unmarshal(data, &legacy); err != nil {
+		return err
+	}
+	if decoded.NoteID == "" {
+		decoded.NoteID = legacy.NoteID
+	}
+
+	*c = Comment(decoded)
+	return nil
 }
 
 // UserProfileResponse 用户详情页完整响应

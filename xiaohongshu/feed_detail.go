@@ -81,11 +81,11 @@ func NewFeedDetailAction(page playwright.Page) *FeedDetailAction {
 
 // ========== 主要业务逻辑 ==========
 
-func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
+func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, noteID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
 	config = config.normalize()
 
 	page := f.page
-	url := makeFeedDetailURL(feedID, xsecToken)
+	url := makeFeedDetailURL(noteID, xsecToken)
 
 	logrus.Infof("打开 feed 详情页: %s", RedactURL(url))
 	logrus.Infof("配置: 点击更多=%v, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
@@ -133,7 +133,7 @@ func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, 
 		return nil, err
 	}
 
-	return f.extractFeedDetail(page, feedID)
+	return f.extractFeedDetail(page, noteID)
 }
 
 // ========== 评论加载器 ==========
@@ -839,7 +839,7 @@ func checkPageAccessible(page playwright.Page) error {
 
 // ========== 数据提取 ==========
 
-func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, feedID string) (*FeedDetailResponse, error) {
+func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, noteID string) (*FeedDetailResponse, error) {
 	var result string
 
 	err := retry.Do(
@@ -885,9 +885,9 @@ func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, feedID string
 		return nil, fmt.Errorf("failed to unmarshal noteDetailMap: %w", err)
 	}
 
-	noteDetail, exists := noteDetailMap[feedID]
+	noteDetail, exists := noteDetailMap[noteID]
 	if !exists {
-		return nil, fmt.Errorf("feed %s not found in noteDetailMap", feedID)
+		return nil, fmt.Errorf("note %s not found in noteDetailMap", noteID)
 	}
 
 	return &FeedDetailResponse{
@@ -896,6 +896,6 @@ func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, feedID string
 	}, nil
 }
 
-func makeFeedDetailURL(feedID, xsecToken string) string {
-	return fmt.Sprintf("https://www.xiaohongshu.com/explore/%s?xsec_token=%s&xsec_source=pc_feed", feedID, xsecToken)
+func makeFeedDetailURL(noteID, xsecToken string) string {
+	return fmt.Sprintf("https://www.xiaohongshu.com/explore/%s?xsec_token=%s&xsec_source=pc_feed", noteID, xsecToken)
 }

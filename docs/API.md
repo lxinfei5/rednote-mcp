@@ -1,6 +1,6 @@
 # 小红书 MCP HTTP API 文档（只读裁剪版）
 
-本版本只保留登录初始化、Feed/用户信息读取能力。所有内容写入、评论/回复写入、点赞/收藏操作、通知和 Cookie 删除接口均已移除；访问这些旧路径会返回 404。Feed 详情中的评论仍可读取。
+本版本只保留登录初始化、Feed/笔记和用户信息读取能力。所有内容写入、评论/回复写入、点赞/收藏操作、通知和 Cookie 删除接口均已移除；访问这些旧路径会返回 404。Feed 详情中的评论仍可读取。
 
 **Base URL**: `http://localhost:18060`
 
@@ -131,6 +131,17 @@ Content-Type: application/json
 - `search_scope`: `不限`、`已看过`、`未看过`、`已关注`
 - `location`: `不限`、`同城`、`附近`
 
+列表结果中的每条笔记统一使用以下字段，字段值可以直接串联到详情接口：
+
+```json
+{
+  "note_id": "笔记ID",
+  "xsec_token": "访问令牌"
+}
+```
+
+`note_id` 是小红书笔记的唯一标识；`xsec_token` 是访问详情或指定用户主页所需的时效令牌。
+
 ### 3.3 获取 Feed 详情
 
 ```http
@@ -138,7 +149,7 @@ POST /api/v1/feeds/detail
 Content-Type: application/json
 
 {
-  "feed_id": "笔记ID",
+  "note_id": "笔记ID",
   "xsec_token": "访问令牌",
   "load_all_comments": false,
   "comment_config": {
@@ -150,7 +161,7 @@ Content-Type: application/json
 }
 ```
 
-`feed_id` 和 `xsec_token` 通常从 Feed 列表或搜索结果获得。详情结果包含正文、图片、作者、互动数据、评论；视频笔记还会返回带时效签名的视频流和字幕信息。`comment_config` 仅在需要加载更多评论时使用。
+`note_id` 和 `xsec_token` 通常直接从 Feed 列表或搜索结果中的同名字段获得。旧字段 `feed_id` 仍作为兼容别名接受，新调用请使用 `note_id`。详情结果中的笔记标识和令牌也统一为 `note_id`、`xsec_token`，并包含正文、图片、作者、互动数据、评论；视频笔记还会返回带时效签名的视频流和字幕信息。`comment_config` 仅在需要加载更多评论时使用。
 
 ## 4. 用户读取
 
@@ -189,6 +200,8 @@ MCP 端点为 `/mcp` 和 `/mcp/*path`，使用 Streamable HTTP。当前注册的
 - `user_profile`
 - `get_my_profile`
 
+`list_feeds`、`search_feeds`、`user_profile` 和 `get_my_profile` 返回的笔记条目统一使用 `note_id`、`xsec_token`。调用 `get_feed_detail` 时，将这两个字段原样传入即可；`feed_id` 仅作为旧 MCP/HTTP 调用的兼容别名。
+
 ## 6. 错误代码
 
 | 错误代码 | HTTP 状态码 | 描述 |
@@ -206,6 +219,6 @@ MCP 端点为 `/mcp` 和 `/mcp/*path`，使用 Streamable HTTP。当前注册的
 ## 注意事项
 
 1. 访问部分读取能力前需要先登录。
-2. `xsec_token` 是小红书访问令牌，需要从 Feed 列表或搜索结果中传递。
+2. `note_id` 和 `xsec_token` 是笔记详情调用所需的字段，通常从 Feed 列表或搜索结果中原样传递。
 3. 服务仍会在登录二维码扫码成功后保存 Cookie；除此之外，本版本不提供内容写入操作。
 4. 所有接口都受本机 Host/Origin 安全中间件保护，并记录请求日志。

@@ -101,6 +101,65 @@ func TestReadToolsRegistered(t *testing.T) {
 	}
 }
 
+func TestMCPNoteFieldContract(t *testing.T) {
+	router := setupRoutes(NewAppServer(NewXiaohongshuService(sharedBrowser), nil))
+	server := httptest.NewServer(router)
+	defer server.Close()
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/mcp",
+		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	type toolDefinition struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		InputSchema map[string]any `json:"inputSchema"`
+	}
+	var result struct {
+		Result struct {
+			Tools []toolDefinition `json:"tools"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
+
+	findTool := func(name string) (*toolDefinition, bool) {
+		for i := range result.Result.Tools {
+			tool := &result.Result.Tools[i]
+			if tool.Name == name {
+				return tool, true
+			}
+		}
+		return nil, false
+	}
+
+	detail, ok := findTool("get_feed_detail")
+	require.True(t, ok)
+	assert.Contains(t, detail.Description, "note_id")
+	assert.Contains(t, detail.Description, "xsec_token")
+	detailProperties, ok := detail.InputSchema["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, detailProperties, "note_id")
+	assert.Contains(t, detailProperties, "feed_id")
+	assert.Contains(t, detailProperties, "xsec_token")
+
+	search, ok := findTool("search_feeds")
+	require.True(t, ok)
+	searchProperties, ok := search.InputSchema["properties"].(map[string]any)
+	require.True(t, ok)
+	filters, ok := searchProperties["filters"].(map[string]any)
+	require.True(t, ok)
+	filterProperties, ok := filters["properties"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, filterProperties, "sort_by")
+	assert.Contains(t, filterProperties, "note_type")
+}
+
 // TestReadRoutesRegistered 固定裁剪后的 HTTP 路由集合。
 //
 // 读路由表而不是发请求：这些 handler 会真的起浏览器访问小红书，

@@ -33,7 +33,7 @@ func TestSearch(t *testing.T) {
 	fmt.Printf("成功获取到 %d 个 Feed\n", len(feeds))
 
 	for _, feed := range feeds {
-		fmt.Printf("Feed ID: %s\n", feed.ID)
+		fmt.Printf("Note ID: %s\n", feed.NoteID)
 		fmt.Printf("Feed Title: %s\n", feed.NoteCard.DisplayTitle)
 	}
 }
@@ -63,7 +63,7 @@ func TestSearchWithFilters(t *testing.T) {
 	fmt.Printf("成功获取到 %d 个筛选后的 Feed\n", len(feeds))
 
 	for _, feed := range feeds {
-		fmt.Printf("Feed ID: %s\n", feed.ID)
+		fmt.Printf("Note ID: %s\n", feed.NoteID)
 		fmt.Printf("Feed Title: %s\n", feed.NoteCard.DisplayTitle)
 	}
 }

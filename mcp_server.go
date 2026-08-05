@@ -98,7 +98,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 	mcp.AddTool(server,
 		&mcp.Tool{
 			Name:        "list_feeds",
-			Description: "获取首页 Feeds 列表",
+			Description: "获取首页笔记列表。每条笔记返回 note_id 和 xsec_token，可直接传给 get_feed_detail；列表键仍为 feeds。",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "List Feeds",
 				ReadOnlyHint: true,
@@ -114,7 +114,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 	mcp.AddTool(server,
 		&mcp.Tool{
 			Name:        "search_feeds",
-			Description: "搜索小红书内容（需要已登录）",
+			Description: "搜索小红书笔记（需要已登录）。每条结果返回 note_id 和 xsec_token，可直接传给 get_feed_detail；结果列表键为 feeds。",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Search Feeds",
 				ReadOnlyHint: true,
@@ -130,7 +130,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 	mcp.AddTool(server,
 		&mcp.Tool{
 			Name:        "get_feed_detail",
-			Description: "获取小红书笔记详情，返回笔记内容、图片、作者信息、互动数据（点赞/收藏/分享数）及评论列表。视频笔记额外返回 video 字段，含各编码档位的视频直链与字幕地址（均带签名、有时效）。默认返回前10条一级评论，如需更多评论请设置load_all_comments=true",
+			Description: "获取小红书笔记详情。使用 note_id 和 xsec_token；旧参数 feed_id 仍兼容但新调用请使用 note_id。返回笔记内容、图片、作者信息、互动数据（点赞/收藏/分享数）及评论列表，结果中的笔记标识统一为 note_id，令牌统一为 xsec_token。视频笔记额外返回 video 字段，含各编码档位的视频直链与字幕地址（均带签名、有时效）。默认返回前10条一级评论，如需更多评论请设置load_all_comments=true",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Get Feed Detail",
 				ReadOnlyHint: true,
@@ -146,7 +146,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 	mcp.AddTool(server,
 		&mcp.Tool{
 			Name:        "user_profile",
-			Description: "获取指定的小红书用户主页，返回用户基本信息，关注、粉丝、获赞量，以及指定 tab 下的内容。tab 可选 note(笔记,默认)、fav(收藏)、liked(点赞)，后两者可能被对方设为不公开",
+			Description: "获取指定的小红书用户主页，返回用户基本信息，关注、粉丝、获赞量，以及指定 tab 下的内容。输入令牌使用 xsec_token，返回的笔记使用 note_id 和 xsec_token。tab 可选 note(笔记,默认)、fav(收藏)、liked(点赞)，后两者可能被对方设为不公开",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "User Profile",
 				ReadOnlyHint: true,
@@ -162,7 +162,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 	mcp.AddTool(server,
 		&mcp.Tool{
 			Name:        "get_my_profile",
-			Description: "获取当前登录用户的主页，返回用户基本信息，关注、粉丝、获赞量，以及指定 tab 下的内容。tab 可选 note(自己发的笔记,默认)、fav(自己收藏的)、liked(自己点赞的)",
+			Description: "获取当前登录用户的主页，返回用户基本信息，关注、粉丝、获赞量，以及指定 tab 下的内容。返回的笔记使用 note_id 和 xsec_token。tab 可选 note(自己发的笔记,默认)、fav(自己收藏的)、liked(自己点赞的)",
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Get My Profile",
 				ReadOnlyHint: true,

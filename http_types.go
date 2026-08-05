@@ -18,7 +18,8 @@ type SuccessResponse struct {
 
 // FeedDetailRequest Feed 详情请求。
 type FeedDetailRequest struct {
-	FeedID          string                         `json:"feed_id" binding:"required"`
+	NoteID          string                         `json:"note_id,omitempty"`
+	LegacyFeedID    string                         `json:"feed_id,omitempty"`
 	XsecToken       string                         `json:"xsec_token" binding:"required"`
 	LoadAllComments bool                           `json:"load_all_comments,omitempty"`
 	CommentConfig   *xiaohongshu.CommentLoadConfig `json:"comment_config,omitempty"`

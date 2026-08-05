@@ -31,7 +31,7 @@ func TestGetFeedsList(t *testing.T) {
 	fmt.Printf("成功获取到 %d 个 Feed\n", len(feeds))
 
 	for i, feed := range feeds {
-		require.NotEmpty(t, feed.ID, "Feed ID should not be empty")
+		require.NotEmpty(t, feed.NoteID, "Note ID should not be empty")
 		require.NotEmpty(t, feed.ModelType, "ModelType should not be empty")
 		require.NotEmpty(t, feed.XsecToken, "XsecToken should not be empty")
 		require.NotEmpty(t, feed.NoteCard.Type, "NoteCard Type should not be empty")
@@ -49,7 +49,7 @@ func TestGetFeedsList(t *testing.T) {
 		// 只对第一个 Feed 进行完整 JSON 序列化检查
 		if i < 3 {
 			fmt.Printf("\nFeed %d 基本信息:\n", i+1)
-			fmt.Printf("  ID: %s\n", feed.ID)
+			fmt.Printf("  Note ID: %s\n", feed.NoteID)
 			fmt.Printf("  ModelType: %s\n", feed.ModelType)
 			fmt.Printf("  标题: %s\n", feed.NoteCard.DisplayTitle)
 			fmt.Printf("  类型: %s\n", feed.NoteCard.Type)

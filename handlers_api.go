@@ -130,14 +130,24 @@ func (s *AppServer) getFeedDetailHandler(c *gin.Context) {
 			"请求参数错误", err.Error())
 		return
 	}
+	noteID, err := canonicalNoteID(req.NoteID, req.LegacyFeedID)
+	if err != nil {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST",
+			"请求参数错误", err.Error())
+		return
+	}
+	if noteID == "" {
+		respondError(c, http.StatusBadRequest, "INVALID_REQUEST",
+			"请求参数错误", "note_id parameter is required")
+		return
+	}
 
 	var result *FeedDetailResponse
-	var err error
 
 	if req.CommentConfig != nil {
-		result, err = s.xiaohongshuService.GetFeedDetailWithConfig(c.Request.Context(), req.FeedID, req.XsecToken, req.LoadAllComments, *req.CommentConfig)
+		result, err = s.xiaohongshuService.GetFeedDetailWithConfig(c.Request.Context(), noteID, req.XsecToken, req.LoadAllComments, *req.CommentConfig)
 	} else {
-		result, err = s.xiaohongshuService.GetFeedDetail(c.Request.Context(), req.FeedID, req.XsecToken, req.LoadAllComments)
+		result, err = s.xiaohongshuService.GetFeedDetail(c.Request.Context(), noteID, req.XsecToken, req.LoadAllComments)
 	}
 
 	if err != nil {
