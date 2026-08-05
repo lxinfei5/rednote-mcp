@@ -53,9 +53,10 @@ do_start() {
 	if [ ! -f "$XHS_MCP_DIR/cookies.json" ]; then
 		log_warn "cookies.json missing in $XHS_MCP_DIR — login may be required"
 	fi
-	# 显式有头 + 仅回环，避免旧二进制默认 headless/全网卡漂移
+	# 默认无头（服务态，不弹窗）；XHS_HEADLESS=false 可临时开有头调试。
+	# 仅回环，避免全网卡暴露。
 	local listen="127.0.0.1:${PORT}"
-	local headless_flag="${XHS_HEADLESS:-false}"
+	local headless_flag="${XHS_HEADLESS:-true}"
 	log_info "Starting xiaohongshu-mcp on ${listen} headless=${headless_flag} (cwd=$XHS_MCP_DIR)"
 	# cwd is a hard dependency for relative cookies.json
 	(
