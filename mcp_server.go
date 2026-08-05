@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime/debug"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sirupsen/logrus"
 )
@@ -59,6 +60,19 @@ func withPanicRecovery[T any](
 
 		return handler(ctx, req, args)
 	}
+}
+
+// feedDetailInputSchema 声明新旧笔记 ID 参数二选一，避免兼容别名只存在于文字描述中。
+func feedDetailInputSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[FeedDetailArgs](nil)
+	if err != nil {
+		panic(fmt.Sprintf("build get_feed_detail input schema: %v", err))
+	}
+	schema.AnyOf = []*jsonschema.Schema{
+		{Required: []string{"note_id"}},
+		{Required: []string{"feed_id"}},
+	}
+	return schema
 }
 
 // registerTools 注册所有 MCP 工具
@@ -131,6 +145,7 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 		&mcp.Tool{
 			Name:        "get_feed_detail",
 			Description: "获取小红书笔记详情。使用 note_id 和 xsec_token；旧参数 feed_id 仍兼容但新调用请使用 note_id。返回笔记内容、图片、作者信息、互动数据（点赞/收藏/分享数）及评论列表，结果中的笔记标识统一为 note_id，令牌统一为 xsec_token。视频笔记额外返回 video 字段，含各编码档位的视频直链与字幕地址（均带签名、有时效）。默认返回前10条一级评论，如需更多评论请设置load_all_comments=true",
+			InputSchema: feedDetailInputSchema(),
 			Annotations: &mcp.ToolAnnotations{
 				Title:        "Get Feed Detail",
 				ReadOnlyHint: true,

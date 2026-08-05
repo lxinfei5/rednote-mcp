@@ -147,6 +147,10 @@ func TestMCPNoteFieldContract(t *testing.T) {
 	assert.Contains(t, detailProperties, "note_id")
 	assert.Contains(t, detailProperties, "feed_id")
 	assert.Contains(t, detailProperties, "xsec_token")
+	assert.Equal(t, []any{
+		map[string]any{"required": []any{"note_id"}},
+		map[string]any{"required": []any{"feed_id"}},
+	}, detail.InputSchema["anyOf"])
 
 	search, ok := findTool("search_feeds")
 	require.True(t, ok)
