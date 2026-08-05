@@ -195,12 +195,12 @@ MCP 端点为 `/mcp` 和 `/mcp/*path`，使用 Streamable HTTP。当前注册的
 |----------|-------------|------|
 | `INVALID_REQUEST` | 400 | 请求参数错误或格式不正确 |
 | `MISSING_KEYWORD` | 400 | 搜索时缺少关键词 |
-| `STATUS_CHECK_FAILED` | 500 | 登录状态或二维码获取失败 |
-| `LIST_FEEDS_FAILED` | 500 | 获取 Feed 列表失败 |
-| `SEARCH_FEEDS_FAILED` | 500 | 搜索 Feed 失败 |
-| `GET_FEED_DETAIL_FAILED` | 500 | 获取 Feed 详情失败 |
-| `GET_USER_PROFILE_FAILED` | 500 | 获取用户主页失败 |
-| `GET_MY_PROFILE_FAILED` | 500 | 获取当前用户主页失败 |
+| `STATUS_CHECK_FAILED` | 408/500/504 | 登录状态或二维码获取失败 |
+| `LIST_FEEDS_FAILED` | 408/500/504 | 获取 Feed 列表失败 |
+| `SEARCH_FEEDS_FAILED` | 400/408/500/504 | 搜索 Feed 失败或筛选参数无效 |
+| `GET_FEED_DETAIL_FAILED` | 408/500/504 | 获取 Feed 详情失败 |
+| `GET_USER_PROFILE_FAILED` | 400/408/500/504 | 获取用户主页失败或 tab 无效 |
+| `GET_MY_PROFILE_FAILED` | 400/408/500/504 | 获取当前用户主页失败或 tab 无效 |
 | `INTERNAL_ERROR` | 500 | 服务器内部错误 |
 
 ## 注意事项

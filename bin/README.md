@@ -26,10 +26,10 @@ go run ./cmd/camoufox-setup
 
 ```bash
 # 在任意 cwd 均可（脚本会 cd 到项目根）
-~/Documents/Xiaohongshu/xiaohongshu-mcp/bin/xhs-mcp-daemon.sh start
-~/Documents/Xiaohongshu/xiaohongshu-mcp/bin/xhs-mcp-daemon.sh stop
-~/Documents/Xiaohongshu/xiaohongshu-mcp/bin/xhs-mcp-daemon.sh status
-~/Documents/Xiaohongshu/xiaohongshu-mcp/bin/xhs-mcp-daemon.sh health
+/path/to/rednote-mcp/bin/xhs-mcp-daemon.sh start
+/path/to/rednote-mcp/bin/xhs-mcp-daemon.sh stop
+/path/to/rednote-mcp/bin/xhs-mcp-daemon.sh status
+/path/to/rednote-mcp/bin/xhs-mcp-daemon.sh health
 ```
 
 - 监听：`127.0.0.1:18060`（MCP：`http://localhost:18060/mcp`）

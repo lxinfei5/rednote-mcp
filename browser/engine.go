@@ -32,17 +32,9 @@ type Browser struct {
 	ctx     playwright.BrowserContext
 	userDir string
 
-	mu       sync.Mutex
-	closed   bool
-	ownsDir  bool
-	profiles ProfileOptions
-}
-
-// ProfileOptions 控制指纹与窗口等运行时画像。
-type ProfileOptions struct {
-	Language string
-	Width    int
-	Height   int
+	mu      sync.Mutex
+	closed  bool
+	ownsDir bool
 }
 
 func newBrowser(cfg browserEngineConfig) (*Browser, error) {
@@ -100,7 +92,7 @@ func newBrowser(cfg browserEngineConfig) (*Browser, error) {
 	// 注入登录 cookie（文件为 CDP 线格式，见 cookies.go）
 	if cfg.cookies != "" {
 		injected := addCookies(ctx, cookiesToOptional([]byte(cfg.cookies)))
-		logrus.Debugf("injected %d cookies into context", injected)
+		logrus.Debugf("已向上下文注入 %d 个 cookies", injected)
 	}
 
 	b := &Browser{
@@ -108,11 +100,6 @@ func newBrowser(cfg browserEngineConfig) (*Browser, error) {
 		ctx:     ctx,
 		userDir: userDir,
 		ownsDir: ownsDir,
-		profiles: ProfileOptions{
-			Language: cfg.language,
-			Width:    width,
-			Height:   height,
-		},
 	}
 	return b, nil
 }
@@ -125,11 +112,6 @@ func (b *Browser) NewPage() (playwright.Page, error) {
 		return nil, fmt.Errorf("browser is closed")
 	}
 	return b.ctx.NewPage()
-}
-
-// Context 暴露底层持久化上下文（取 cookie、新增 page 等）。
-func (b *Browser) Context() playwright.BrowserContext {
-	return b.ctx
 }
 
 // Cookies 导出当前上下文的全部 cookie（CDP 线格式字节），供登录后落盘。
@@ -157,17 +139,17 @@ func (b *Browser) Close() {
 
 	if b.ctx != nil {
 		if err := b.ctx.Close(); err != nil {
-			logrus.Warnf("close browser context failed: %v", err)
+			logrus.Warnf("关闭浏览器上下文失败: %v", err)
 		}
 	}
 	if b.pw != nil {
 		if err := b.pw.Stop(); err != nil {
-			logrus.Warnf("stop playwright driver failed: %v", err)
+			logrus.Warnf("停止 playwright 驱动失败: %v", err)
 		}
 	}
 	if b.ownsDir && b.userDir != "" {
 		if err := os.RemoveAll(b.userDir); err != nil {
-			logrus.Warnf("cleanup camoufox profile failed: %v", err)
+			logrus.Warnf("清理 Camoufox profile 失败: %v", err)
 		}
 	}
 }
@@ -181,11 +163,11 @@ func addCookies(ctx playwright.BrowserContext, ocs []playwright.OptionalCookie) 
 	if err := ctx.AddCookies(ocs); err == nil {
 		return len(ocs)
 	}
-	logrus.Warnf("batch addCookies failed, fallback to per-cookie injection (%d cookies)", len(ocs))
+	logrus.Warnf("批量注入 cookies 失败，回退到逐条注入（%d 个）", len(ocs))
 	ok := 0
 	for _, oc := range ocs {
 		if err := ctx.AddCookies([]playwright.OptionalCookie{oc}); err != nil {
-			logrus.Warnf("skip cookie %q: %v", oc.Name, err)
+			logrus.Warnf("跳过 cookie %q: %v", oc.Name, err)
 			continue
 		}
 		ok++

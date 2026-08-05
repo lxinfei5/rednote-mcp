@@ -21,7 +21,7 @@ func main() {
 	flag.StringVar(&port, "port", "127.0.0.1:18060", "监听地址，默认仅回环；全网卡用 --port :18060")
 	flag.Parse()
 
-	logrus.Infof("xiaohongshu-mcp version: %s", version)
+	logrus.Infof("xiaohongshu-mcp 版本: %s", version)
 
 	// 浏览器固定为 Camoufox：自构建、固定版本、可校验，运行时不下载。
 	binPath, binSource, err := browser.ResolveCamoufoxBin()
@@ -29,23 +29,23 @@ func main() {
 		logrus.Fatalf("%v", err)
 	}
 	configs.SetCamoufoxBin(binPath)
-	logrus.Infof("using camoufox binary: %s (source=%s, version=%s)", binPath, binSource, browser.CamoufoxVersion)
+	logrus.Infof("使用 Camoufox 二进制: %s（来源=%s，版本=%s）", binPath, binSource, browser.CamoufoxVersion)
 
 	configs.InitHeadless(headless)
 	// 入口层解析 seed 与代理，经 configs 透传给浏览器工厂。
 	// seed 取值：环境变量 > 会话文件 > 新生成并写回，保证同一账号每次启动指纹一致。
 	configs.SetFingerprintSeed(configs.ResolveFingerprintSeed(
-		cookies.NewLoadCookie(cookies.GetCookiesFilePath())))
+		cookies.NewCookieStore(cookies.GetCookiesFilePath())))
 	configs.SetProxy(configs.ProxyFromEnv())
 
-	logrus.Infof("browser session: camoufox shared+serial lease; risk_streak_limit=%d", riskStreakLimit())
+	logrus.Infof("浏览器会话: 共享 Camoufox + 串行 lease；risk_streak_limit=%d", riskStreakLimit())
 
 	// 初始化服务
-	xiaohongshuService := NewXiaohongshuService()
+	xiaohongshuService := NewXiaohongshuService(sharedBrowser)
 
 	// 创建并启动应用服务器（常驻浏览器在首次请求时懒创建，停服时 Close）
-	appServer := NewAppServer(xiaohongshuService)
+	appServer := NewAppServer(xiaohongshuService, sharedBrowser.Close)
 	if err := appServer.Start(port); err != nil {
-		logrus.Fatalf("failed to run server: %v", err)
+		logrus.Fatalf("启动服务器失败: %v", err)
 	}
 }

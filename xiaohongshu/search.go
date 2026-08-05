@@ -38,16 +38,16 @@ type filterGroup struct {
 }
 
 var filterGroups = []filterGroup{
-	{"排序依据", func(f FilterOption) string { return f.SortBy },
-		[]string{"综合", "最新", "最多点赞", "最多评论", "最多收藏"}},
-	{"笔记类型", func(f FilterOption) string { return f.NoteType },
-		[]string{"不限", "视频", "图文"}},
-	{"发布时间", func(f FilterOption) string { return f.PublishTime },
-		[]string{"不限", "一天内", "一周内", "半年内"}},
-	{"搜索范围", func(f FilterOption) string { return f.SearchScope },
-		[]string{"不限", "已看过", "未看过", "已关注"}},
-	{"位置距离", func(f FilterOption) string { return f.Location },
-		[]string{"不限", "同城", "附近"}},
+	{label: "排序依据", pick: func(f FilterOption) string { return f.SortBy },
+		allowed: []string{"综合", "最新", "最多点赞", "最多评论", "最多收藏"}},
+	{label: "笔记类型", pick: func(f FilterOption) string { return f.NoteType },
+		allowed: []string{"不限", "视频", "图文"}},
+	{label: "发布时间", pick: func(f FilterOption) string { return f.PublishTime },
+		allowed: []string{"不限", "一天内", "一周内", "半年内"}},
+	{label: "搜索范围", pick: func(f FilterOption) string { return f.SearchScope },
+		allowed: []string{"不限", "已看过", "未看过", "已关注"}},
+	{label: "位置距离", pick: func(f FilterOption) string { return f.Location },
+		allowed: []string{"不限", "同城", "附近"}},
 }
 
 // pendingFilter 一个待应用的筛选项。
@@ -68,8 +68,8 @@ func collectFilters(filters []FilterOption) ([]pendingFilter, error) {
 				continue
 			}
 			if !slices.Contains(g.allowed, value) {
-				return nil, fmt.Errorf("%s 不支持 %q，可选：%s",
-					g.label, value, strings.Join(g.allowed, "、"))
+				return nil, fmt.Errorf("%w: filter %s does not support %q; allowed: %s",
+					ErrInvalidArgument, g.label, value, strings.Join(g.allowed, ", "))
 			}
 			pending = append(pending, pendingFilter{group: g.label, option: value})
 		}
@@ -99,31 +99,38 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
 		Timeout:   playwright.Float(60_000),
 	}); err != nil {
-		return nil, fmt.Errorf("导航搜索页失败: %w", err)
+		return nil, fmt.Errorf("navigate to search page failed: %w", err)
 	}
 	if _, err := page.WaitForFunction(`() => window.__INITIAL_STATE__ !== undefined`, nil,
 		playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(60_000)}); err != nil {
-		return nil, fmt.Errorf("等待页面状态失败: %w", err)
+		return nil, fmt.Errorf("wait for page state failed: %w", err)
 	}
-	humanize.Delay(ctx, humanize.AfterNavigate)
+	if err := humanize.Delay(ctx, humanize.AfterNavigate); err != nil {
+		return nil, err
+	}
 
 	if len(pending) > 0 {
 		// 悬停在筛选按钮上展开面板
 		filterButton, err := page.QuerySelector(`div.filter`)
-		if err != nil || filterButton == nil {
-			return nil, fmt.Errorf("未找到筛选按钮: %w", err)
+		if err != nil {
+			return nil, fmt.Errorf("query filter button failed: %w", err)
+		}
+		if filterButton == nil {
+			return nil, fmt.Errorf("filter button not found")
 		}
 		if err := humanize.Hover(filterButton); err != nil {
-			return nil, fmt.Errorf("悬停筛选按钮失败: %w", err)
+			return nil, fmt.Errorf("hover filter button failed: %w", err)
 		}
-		humanize.Delay(ctx, humanize.BeforeClick)
+		if err := humanize.Delay(ctx, humanize.BeforeClick); err != nil {
+			return nil, err
+		}
 
 		// 等待筛选面板出现
 		if _, err := page.WaitForSelector(`div.filter-panel`, playwright.PageWaitForSelectorOptions{
 			State:   playwright.WaitForSelectorStateAttached,
 			Timeout: playwright.Float(10_000),
 		}); err != nil {
-			return nil, fmt.Errorf("等待筛选面板失败: %w", err)
+			return nil, fmt.Errorf("wait for filter panel failed: %w", err)
 		}
 
 		// 记下筛选前的结果，用来判断筛选后的数据什么时候到位
@@ -136,9 +143,11 @@ func (s *SearchAction) Search(ctx context.Context, keyword string, filters ...Fi
 			if err != nil {
 				return nil, err
 			}
-			humanize.Delay(ctx, humanize.BeforeClick)
+			if err := humanize.Delay(ctx, humanize.BeforeClick); err != nil {
+				return nil, err
+			}
 			if err := humanize.ClickNoWait(option); err != nil {
-				return nil, fmt.Errorf("点击筛选选项「%s」失败: %w", pf.option, err)
+				return nil, fmt.Errorf("click filter option %q failed: %w", pf.option, err)
 			}
 		}
 
@@ -200,7 +209,7 @@ func waitFeedsChanged(page playwright.Page, before string, timeout time.Duration
 func findFilterOption(page playwright.Page, pf pendingFilter) (playwright.ElementHandle, error) {
 	groups, err := page.QuerySelectorAll("div.filter-panel div.filters")
 	if err != nil {
-		return nil, fmt.Errorf("读取筛选面板失败: %w", err)
+		return nil, fmt.Errorf("read filter panel failed: %w", err)
 	}
 
 	for _, group := range groups {
@@ -215,7 +224,7 @@ func findFilterOption(page playwright.Page, pf pendingFilter) (playwright.Elemen
 
 		options, err := group.QuerySelectorAll("div.tags")
 		if err != nil {
-			return nil, fmt.Errorf("读取「%s」的选项失败: %w", pf.group, err)
+			return nil, fmt.Errorf("read options for filter group %q failed: %w", pf.group, err)
 		}
 
 		var available []string
@@ -230,11 +239,11 @@ func findFilterOption(page playwright.Page, pf pendingFilter) (playwright.Elemen
 			}
 			available = append(available, t)
 		}
-		return nil, fmt.Errorf("「%s」里没有选项「%s」，页面上是：%s",
-			pf.group, pf.option, strings.Join(available, "、"))
+		return nil, fmt.Errorf("filter group %q does not contain option %q; page options: %s",
+			pf.group, pf.option, strings.Join(available, ", "))
 	}
 
-	return nil, fmt.Errorf("筛选面板里没有「%s」这一组", pf.group)
+	return nil, fmt.Errorf("filter panel does not contain group %q", pf.group)
 }
 
 func makeSearchURL(keyword string) string {

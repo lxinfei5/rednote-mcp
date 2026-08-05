@@ -70,7 +70,7 @@ func observeOpResult(err error) {
 		return
 	}
 	n := riskStreak.Add(1)
-	logrus.Warnf("risk signal observed (streak=%d): %v", n, err)
+	logrus.Warnf("检测到风控信号（连续 %d 次）: %v", n, err)
 }
 
 func checkRiskCircuit() error {
@@ -88,7 +88,7 @@ func (s *browserSession) ensureLocked() error {
 	if s.b != nil {
 		return nil
 	}
-	logrus.Info("starting shared camoufox instance")
+	logrus.Info("启动共享 Camoufox 实例")
 	opts := []browser.Option{
 		browser.WithFingerprintSeed(configs.FingerprintSeed()),
 		browser.WithProxy(configs.Proxy()),
@@ -108,11 +108,11 @@ func (s *browserSession) resetLocked() {
 	if s.b == nil {
 		return
 	}
-	logrus.Info("closing shared camoufox instance")
+	logrus.Info("关闭共享 Camoufox 实例")
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
-				logrus.Warnf("browser close panic: %v", r)
+				logrus.Warnf("关闭浏览器时发生 panic: %v", r)
 			}
 		}()
 		s.b.Close()
@@ -139,7 +139,7 @@ func (s *browserSession) Do(fn func(playwright.Page) error) error {
 
 	page, err := s.newPageLocked()
 	if err != nil {
-		logrus.Warnf("new page failed, recreating browser: %v", err)
+		logrus.Warnf("新建页面失败，重新创建浏览器: %v", err)
 		s.resetLocked()
 		if err = s.ensureLocked(); err != nil {
 			return err
@@ -162,29 +162,30 @@ func (s *browserSession) Do(fn func(playwright.Page) error) error {
 }
 
 // Lease 长期占用（扫码登录）：调用方必须 release；持锁期间其它 Do 阻塞。
-func (s *browserSession) Lease() (playwright.Page, func(), error) {
+// 返回浏览器实例，供 lease 持有者在释放锁前读取 cookie。
+func (s *browserSession) Lease() (playwright.Page, *browser.Browser, func(), error) {
 	if err := checkRiskCircuit(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	s.mu.Lock()
 	if err := s.ensureLocked(); err != nil {
 		s.mu.Unlock()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	page, err := s.newPageLocked()
 	if err != nil {
-		logrus.Warnf("lease new page failed, recreating browser: %v", err)
+		logrus.Warnf("lease 新建页面失败，重新创建浏览器: %v", err)
 		s.resetLocked()
 		if err = s.ensureLocked(); err != nil {
 			s.mu.Unlock()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		page, err = s.newPageLocked()
 		if err != nil {
 			s.mu.Unlock()
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -197,7 +198,7 @@ func (s *browserSession) Lease() (playwright.Page, func(), error) {
 			s.mu.Unlock()
 		})
 	}
-	return page, release, nil
+	return page, s.b, release, nil
 }
 
 // isBrowserDead 判断错误是否为浏览器/连接层灾难（下次重建浏览器）。
@@ -210,14 +211,6 @@ func isBrowserDead(err error) bool {
 		strings.Contains(s, "target closed") ||
 		strings.Contains(s, "browser has been closed") ||
 		strings.Contains(s, "Target closed")
-}
-
-// current 返回当前常驻浏览器实例（可能为 nil），用于登录后导出 cookie 等。
-// 只在确知浏览器已启动（如扫码流程持有 lease）时使用。
-func (s *browserSession) current() *browser.Browser {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.b
 }
 
 // Invalidate 丢弃常驻浏览器（删 cookie / 需换登录态后调用）。

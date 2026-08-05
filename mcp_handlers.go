@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -44,12 +43,12 @@ func (s *AppServer) handleCheckLoginStatus(ctx context.Context) *MCPToolResult {
 	}
 }
 
-// handleGetLoginQrcode 处理获取登录二维码请求。
+// handleGetLoginQRCode 处理获取登录二维码请求。
 // 返回二维码图片的 Base64 编码和超时时间，供前端展示扫码登录。
-func (s *AppServer) handleGetLoginQrcode(ctx context.Context) *MCPToolResult {
+func (s *AppServer) handleGetLoginQRCode(ctx context.Context) *MCPToolResult {
 	logrus.Info("MCP: 获取登录扫码图片")
 
-	result, err := s.xiaohongshuService.GetLoginQrcode(ctx)
+	result, err := s.xiaohongshuService.GetLoginQRCode(ctx)
 	if err != nil {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取登录扫码图片失败: " + err.Error()}},
@@ -76,8 +75,8 @@ func (s *AppServer) handleGetLoginQrcode(ctx context.Context) *MCPToolResult {
 		{Type: "text", Text: "请用小红书 App 在 " + deadline + " 前扫码登录 👇"},
 		{
 			Type:     "image",
-			MimeType: "image/png",
-			Data:     strings.TrimPrefix(result.Img, "data:image/png;base64,"),
+			MIMEType: "image/png",
+			Data:     strings.TrimPrefix(result.Image, "data:image/png;base64,"),
 		},
 	}
 	return &MCPToolResult{Content: contents}
@@ -133,15 +132,7 @@ func (s *AppServer) handleSearchFeeds(ctx context.Context, args SearchFeedsArgs)
 
 	logrus.Infof("MCP: 搜索Feeds - 关键词: %s", args.Keyword)
 
-	filter := xiaohongshu.FilterOption{
-		SortBy:      args.Filters.SortBy,
-		NoteType:    args.Filters.NoteType,
-		PublishTime: args.Filters.PublishTime,
-		SearchScope: args.Filters.SearchScope,
-		Location:    args.Filters.Location,
-	}
-
-	result, err := s.xiaohongshuService.SearchFeeds(ctx, args.Keyword, filter)
+	result, err := s.xiaohongshuService.SearchFeeds(ctx, args.Keyword, args.Filters)
 	if err != nil {
 		return &MCPToolResult{
 			Content: []MCPContent{{
@@ -172,85 +163,40 @@ func (s *AppServer) handleSearchFeeds(ctx context.Context, args SearchFeedsArgs)
 }
 
 // handleGetFeedDetail 处理获取 Feed 详情
-func (s *AppServer) handleGetFeedDetail(ctx context.Context, args map[string]any) *MCPToolResult {
+func (s *AppServer) handleGetFeedDetail(ctx context.Context, args FeedDetailArgs) *MCPToolResult {
 	logrus.Info("MCP: 获取Feed详情")
 
-	feedID, ok := args["feed_id"].(string)
-	if !ok || feedID == "" {
+	if args.FeedID == "" {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: 缺少feed_id参数"}},
 			IsError: true,
 		}
 	}
 
-	xsecToken, ok := args["xsec_token"].(string)
-	if !ok || xsecToken == "" {
+	if args.XsecToken == "" {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: 缺少xsec_token参数"}},
 			IsError: true,
 		}
 	}
 
-	loadAll := false
-	if raw, ok := args["load_all_comments"]; ok {
-		switch v := raw.(type) {
-		case bool:
-			loadAll = v
-		case string:
-			if parsed, err := strconv.ParseBool(v); err == nil {
-				loadAll = parsed
-			}
-		case float64:
-			loadAll = v != 0
-		}
-	}
-
 	config := xiaohongshu.DefaultCommentLoadConfig()
-
-	if raw, ok := args["click_more_replies"]; ok {
-		switch v := raw.(type) {
-		case bool:
-			config.ClickMoreReplies = v
-		case string:
-			if parsed, err := strconv.ParseBool(v); err == nil {
-				config.ClickMoreReplies = parsed
-			}
+	if args.LoadAllComments {
+		config.ClickMoreReplies = args.ClickMoreReplies
+		if args.ReplyLimit > 0 {
+			config.MaxRepliesThreshold = args.ReplyLimit
+		}
+		if args.Limit > 0 {
+			config.MaxCommentItems = args.Limit
+		}
+		if args.ScrollSpeed != "" {
+			config.ScrollSpeed = args.ScrollSpeed
 		}
 	}
 
-	if raw, ok := args["max_replies_threshold"]; ok {
-		switch v := raw.(type) {
-		case float64:
-			config.MaxRepliesThreshold = int(v)
-		case string:
-			if parsed, err := strconv.Atoi(v); err == nil {
-				config.MaxRepliesThreshold = parsed
-			}
-		case int:
-			config.MaxRepliesThreshold = v
-		}
-	}
+	logrus.Infof("MCP: 获取Feed详情 - Feed ID: %s, loadAllComments=%v, config=%+v", args.FeedID, args.LoadAllComments, config)
 
-	if raw, ok := args["max_comment_items"]; ok {
-		switch v := raw.(type) {
-		case float64:
-			config.MaxCommentItems = int(v)
-		case string:
-			if parsed, err := strconv.Atoi(v); err == nil {
-				config.MaxCommentItems = parsed
-			}
-		case int:
-			config.MaxCommentItems = v
-		}
-	}
-
-	if raw, ok := args["scroll_speed"].(string); ok && raw != "" {
-		config.ScrollSpeed = raw
-	}
-
-	logrus.Infof("MCP: 获取Feed详情 - Feed ID: %s, loadAllComments=%v, config=%+v", feedID, loadAll, config)
-
-	result, err := s.xiaohongshuService.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAll, config)
+	result, err := s.xiaohongshuService.GetFeedDetailWithConfig(ctx, args.FeedID, args.XsecToken, args.LoadAllComments, config)
 	if err != nil {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取Feed详情失败: " + err.Error()}},
@@ -278,29 +224,26 @@ func (s *AppServer) handleGetFeedDetail(ctx context.Context, args map[string]any
 }
 
 // handleUserProfile 获取用户主页
-func (s *AppServer) handleUserProfile(ctx context.Context, args map[string]any) *MCPToolResult {
+func (s *AppServer) handleUserProfile(ctx context.Context, args UserProfileArgs) *MCPToolResult {
 	logrus.Info("MCP: 获取用户主页")
 
-	userID, ok := args["user_id"].(string)
-	if !ok || userID == "" {
+	if args.UserID == "" {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取用户主页失败: 缺少user_id参数"}},
 			IsError: true,
 		}
 	}
 
-	xsecToken, ok := args["xsec_token"].(string)
-	if !ok || xsecToken == "" {
+	if args.XsecToken == "" {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取用户主页失败: 缺少xsec_token参数"}},
 			IsError: true,
 		}
 	}
 
-	logrus.Infof("MCP: 获取用户主页 - User ID: %s", userID)
-	tab, _ := args["tab"].(string)
+	logrus.Infof("MCP: 获取用户主页 - User ID: %s", args.UserID)
 
-	result, err := s.xiaohongshuService.UserProfile(ctx, userID, xsecToken, tab)
+	result, err := s.xiaohongshuService.UserProfile(ctx, args.UserID, args.XsecToken, args.Tab)
 	if err != nil {
 		return &MCPToolResult{
 			Content: []MCPContent{{Type: "text", Text: "获取用户主页失败: " + err.Error()}},

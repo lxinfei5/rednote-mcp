@@ -286,12 +286,12 @@ type UserPageData struct {
 // UserBasicInfo 用户的基本信息
 type UserBasicInfo struct {
 	Gender     int    `json:"gender"`
-	IpLocation string `json:"ipLocation"`
+	IPLocation string `json:"ipLocation"`
 	Desc       string `json:"desc"`
-	Imageb     string `json:"imageb"`
+	ImageB     string `json:"imageb"`
 	Nickname   string `json:"nickname"`
 	Images     string `json:"images"`
-	RedId      string `json:"redId"`
+	RedID      string `json:"redId"`
 }
 
 // UserInteractions 用户的 关注 粉丝 收藏量

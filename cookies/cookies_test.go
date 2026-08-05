@@ -61,7 +61,7 @@ func TestGetCookiesFilePath(t *testing.T) {
 // TestLoadSaveCookies 校验 cookie 文件存取往返。
 func TestLoadSaveCookies(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cookies.json")
-	c := NewLoadCookie(path)
+	c := NewCookieStore(path)
 
 	// 未写入时读取应报错
 	_, err := c.LoadCookies()
@@ -90,7 +90,7 @@ func TestSeed(t *testing.T) {
 		raw := []byte(`[{"name":"web_session","value":"x"}]`)
 		assert.NoError(t, os.WriteFile(path, raw, 0644))
 
-		c := NewLoadCookie(path)
+		c := NewCookieStore(path)
 
 		got, err := c.LoadCookies()
 		assert.NoError(t, err)
@@ -100,7 +100,7 @@ func TestSeed(t *testing.T) {
 
 	t.Run("存seed后读得回来且cookies内容不走样", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "cookies.json")
-		c := NewLoadCookie(path)
+		c := NewCookieStore(path)
 
 		// 字段顺序刻意打乱、数值用科学计数法，用来暴露"反序列化再序列化"造成的走样
 		raw := []byte(`[{"value":"x","name":"web_session","expires":1.75e9}]`)
@@ -120,7 +120,7 @@ func TestSeed(t *testing.T) {
 func TestSeedRobustness(t *testing.T) {
 	t.Run("存cookies不冲掉已有的seed", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "cookies.json")
-		c := NewLoadCookie(path)
+		c := NewCookieStore(path)
 
 		assert.NoError(t, c.SaveSeed(23088))
 		// 模拟重新登录：cookies 换了一批，seed 必须留着
@@ -133,13 +133,13 @@ func TestSeedRobustness(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "cookies.json")
 		assert.NoError(t, os.WriteFile(path, []byte(`{"version":2,"seed":`), 0644))
 
-		assert.Equal(t, 0, NewLoadCookie(path).LoadSeed())
+		assert.Equal(t, 0, NewCookieStore(path).LoadSeed())
 	})
 
 	t.Run("文件不存在时读seed返回0", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "nope.json")
 
-		assert.Equal(t, 0, NewLoadCookie(path).LoadSeed())
+		assert.Equal(t, 0, NewCookieStore(path).LoadSeed())
 	})
 }
 
@@ -152,13 +152,13 @@ func decodeJSON(t *testing.T, data []byte) any {
 	return v
 }
 
-// TestSaveCookies_CreatesParentDir 保存时父目录不存在也应能落盘。
+// TestSaveCookiesCreatesParentDir 保存时父目录不存在也应能落盘。
 //
 // COOKIES_PATH 指向一个还没创建的目录时，原先会直接写失败。
-func TestSaveCookies_CreatesParentDir(t *testing.T) {
+func TestSaveCookiesCreatesParentDir(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "deeper", "cookies.json")
 
-	c := NewLoadCookie(path)
+	c := NewCookieStore(path)
 	assert.NoError(t, c.SaveCookies([]byte(`[{"name":"a","value":"b"}]`)))
 
 	got, err := c.LoadCookies()

@@ -93,7 +93,7 @@ func (a *LoginAction) Login(ctx context.Context) error {
 	return err
 }
 
-func (a *LoginAction) FetchQrcodeImage(ctx context.Context) (string, bool, error) {
+func (a *LoginAction) FetchQRCodeImage(ctx context.Context) (string, bool, error) {
 	if _, err := a.page.Goto("https://www.xiaohongshu.com/explore", playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateLoad,
 		Timeout:   playwright.Float(60_000),

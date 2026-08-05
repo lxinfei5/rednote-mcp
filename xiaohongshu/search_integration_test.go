@@ -14,10 +14,12 @@ import (
 )
 
 func TestSearch(t *testing.T) {
-	b := browser.NewBrowser(false)
+	b, err := browser.NewBrowser(false)
+	require.NoError(t, err)
 	defer b.Close()
 
-	page := b.NewPage()
+	page, err := b.NewPage()
+	require.NoError(t, err)
 	defer func() {
 		_ = page.Close()
 	}()
@@ -37,10 +39,12 @@ func TestSearch(t *testing.T) {
 }
 
 func TestSearchWithFilters(t *testing.T) {
-	b := browser.NewBrowser(false)
+	b, err := browser.NewBrowser(false)
+	require.NoError(t, err)
 	defer b.Close()
 
-	page := b.NewPage()
+	page, err := b.NewPage()
+	require.NoError(t, err)
 	defer func() {
 		_ = page.Close()
 	}()

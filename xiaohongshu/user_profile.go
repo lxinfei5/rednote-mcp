@@ -29,7 +29,7 @@ func ParseProfileTab(s string) (ProfileTab, error) {
 	case "liked", "like", "点赞":
 		return TabLiked, nil
 	}
-	return "", fmt.Errorf("未知的主页 tab %q，可选：note / fav / liked", s)
+	return "", fmt.Errorf("%w: unknown profile tab %q (allowed: note / fav / liked)", ErrInvalidArgument, s)
 }
 
 // tabLabel 子 tab 对应的页面文字。
@@ -55,7 +55,7 @@ func (u *UserProfileAction) UserProfile(ctx context.Context, userID, xsecToken s
 		WaitUntil: playwright.WaitUntilStateDomcontentloaded,
 		Timeout:   playwright.Float(60_000),
 	}); err != nil {
-		return nil, fmt.Errorf("导航用户主页失败: %w", err)
+		return nil, fmt.Errorf("navigate to user profile failed: %w", err)
 	}
 
 	return u.extractUserProfileData(page, tab)
@@ -65,7 +65,7 @@ func (u *UserProfileAction) UserProfile(ctx context.Context, userID, xsecToken s
 func (u *UserProfileAction) extractUserProfileData(page playwright.Page, tab ProfileTab) (*UserProfileResponse, error) {
 	if _, err := page.WaitForFunction(`() => window.__INITIAL_STATE__ !== undefined`, nil,
 		playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(60_000)}); err != nil {
-		return nil, fmt.Errorf("等待页面状态失败: %w", err)
+		return nil, fmt.Errorf("wait for page state failed: %w", err)
 	}
 
 	userDataResult := evalString(page, `() => {
@@ -120,7 +120,7 @@ func (u *UserProfileAction) extractUserProfileData(page playwright.Page, tab Pro
 		want = TabNotes
 	}
 	if notesData.Query != "" && ProfileTab(notesData.Query) != want {
-		return nil, fmt.Errorf("当前 tab 为 %q，与请求的 %q 不符", notesData.Query, want)
+		return nil, fmt.Errorf("current tab %q does not match requested tab %q", notesData.Query, want)
 	}
 
 	response := &UserProfileResponse{
@@ -168,7 +168,7 @@ func (u *UserProfileAction) selectTab(ctx context.Context, page playwright.Page,
 	label := tabLabel[tab]
 	elems, err := page.QuerySelectorAll(`.reds-tab-item.sub-tab-list`)
 	if err != nil {
-		return fmt.Errorf("未找到主页子 tab: %w", err)
+		return fmt.Errorf("profile sub-tab not found: %w", err)
 	}
 
 	for _, elem := range elems {
@@ -176,13 +176,17 @@ func (u *UserProfileAction) selectTab(ctx context.Context, page playwright.Page,
 		if err != nil || strings.TrimSpace(text) != label {
 			continue
 		}
-		humanize.Delay(ctx, humanize.BeforeClick)
-		if err := humanize.Click(elem); err != nil {
-			return fmt.Errorf("切换到 %s 失败: %w", label, err)
+		if err := humanize.Delay(ctx, humanize.BeforeClick); err != nil {
+			return err
 		}
-		humanize.Delay(ctx, humanize.AfterClick)
+		if err := humanize.Click(elem); err != nil {
+			return fmt.Errorf("switch to profile sub-tab %s failed: %w", label, err)
+		}
+		if err := humanize.Delay(ctx, humanize.AfterClick); err != nil {
+			return err
+		}
 		_ = page.WaitForLoadState(playwright.PageWaitForLoadStateOptions{State: playwright.LoadStateNetworkidle})
 		return nil
 	}
-	return fmt.Errorf("未找到子 tab %q", label)
+	return fmt.Errorf("profile sub-tab %q not found", label)
 }

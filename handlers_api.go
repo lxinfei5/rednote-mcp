@@ -1,12 +1,13 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"net/http"
-
-	"github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/xpzouying/xiaohongshu-mcp/xiaohongshu"
 )
 
 // respondError 返回错误响应
@@ -35,11 +36,24 @@ func respondSuccess(c *gin.Context, data any, message string) {
 	c.JSON(http.StatusOK, response)
 }
 
+func serviceErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, xiaohongshu.ErrInvalidArgument):
+		return http.StatusBadRequest
+	case errors.Is(err, context.DeadlineExceeded):
+		return http.StatusGatewayTimeout
+	case errors.Is(err, context.Canceled):
+		return http.StatusRequestTimeout
+	default:
+		return http.StatusInternalServerError
+	}
+}
+
 // checkLoginStatusHandler 检查登录状态
 func (s *AppServer) checkLoginStatusHandler(c *gin.Context) {
 	status, err := s.xiaohongshuService.CheckLoginStatus(c.Request.Context())
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "STATUS_CHECK_FAILED",
+		respondError(c, serviceErrorStatus(err), "STATUS_CHECK_FAILED",
 			"检查登录状态失败", err.Error())
 		return
 	}
@@ -47,12 +61,12 @@ func (s *AppServer) checkLoginStatusHandler(c *gin.Context) {
 	respondSuccess(c, status, "检查登录状态成功")
 }
 
-// getLoginQrcodeHandler 处理 [GET /api/v1/login/qrcode] 请求。
+// getLoginQRCodeHandler 处理 [GET /api/v1/login/qrcode] 请求。
 // 用于生成并返回登录二维码（Base64 图片 + 超时时间），供前端展示给用户扫码登录。
-func (s *AppServer) getLoginQrcodeHandler(c *gin.Context) {
-	result, err := s.xiaohongshuService.GetLoginQrcode(c.Request.Context())
+func (s *AppServer) getLoginQRCodeHandler(c *gin.Context) {
+	result, err := s.xiaohongshuService.GetLoginQRCode(c.Request.Context())
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "STATUS_CHECK_FAILED",
+		respondError(c, serviceErrorStatus(err), "STATUS_CHECK_FAILED",
 			"获取登录二维码失败", err.Error())
 		return
 	}
@@ -64,7 +78,7 @@ func (s *AppServer) getLoginQrcodeHandler(c *gin.Context) {
 func (s *AppServer) listFeedsHandler(c *gin.Context) {
 	result, err := s.xiaohongshuService.ListFeeds(c.Request.Context())
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "LIST_FEEDS_FAILED",
+		respondError(c, serviceErrorStatus(err), "LIST_FEEDS_FAILED",
 			"获取Feeds列表失败", err.Error())
 		return
 	}
@@ -100,7 +114,7 @@ func (s *AppServer) searchFeedsHandler(c *gin.Context) {
 
 	result, err := s.xiaohongshuService.SearchFeeds(c.Request.Context(), keyword, filters)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "SEARCH_FEEDS_FAILED",
+		respondError(c, serviceErrorStatus(err), "SEARCH_FEEDS_FAILED",
 			"搜索Feeds失败", err.Error())
 		return
 	}
@@ -121,19 +135,13 @@ func (s *AppServer) getFeedDetailHandler(c *gin.Context) {
 	var err error
 
 	if req.CommentConfig != nil {
-		config := xiaohongshu.CommentLoadConfig{
-			ClickMoreReplies:    req.CommentConfig.ClickMoreReplies,
-			MaxRepliesThreshold: req.CommentConfig.MaxRepliesThreshold,
-			MaxCommentItems:     req.CommentConfig.MaxCommentItems,
-			ScrollSpeed:         req.CommentConfig.ScrollSpeed,
-		}
-		result, err = s.xiaohongshuService.GetFeedDetailWithConfig(c.Request.Context(), req.FeedID, req.XsecToken, req.LoadAllComments, config)
+		result, err = s.xiaohongshuService.GetFeedDetailWithConfig(c.Request.Context(), req.FeedID, req.XsecToken, req.LoadAllComments, *req.CommentConfig)
 	} else {
 		result, err = s.xiaohongshuService.GetFeedDetail(c.Request.Context(), req.FeedID, req.XsecToken, req.LoadAllComments)
 	}
 
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "GET_FEED_DETAIL_FAILED",
+		respondError(c, serviceErrorStatus(err), "GET_FEED_DETAIL_FAILED",
 			"获取Feed详情失败", err.Error())
 		return
 	}
@@ -152,12 +160,12 @@ func (s *AppServer) userProfileHandler(c *gin.Context) {
 
 	result, err := s.xiaohongshuService.UserProfile(c.Request.Context(), req.UserID, req.XsecToken, req.Tab)
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "GET_USER_PROFILE_FAILED",
+		respondError(c, serviceErrorStatus(err), "GET_USER_PROFILE_FAILED",
 			"获取用户主页失败", err.Error())
 		return
 	}
 
-	respondSuccess(c, map[string]any{"data": result}, "获取用户主页成功")
+	respondSuccess(c, result, "获取用户主页成功")
 }
 
 // healthHandler 健康检查
@@ -176,10 +184,10 @@ func (s *AppServer) myProfileHandler(c *gin.Context) {
 	// 获取当前登录用户信息
 	result, err := s.xiaohongshuService.GetMyProfile(c.Request.Context(), c.Query("tab"))
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "GET_MY_PROFILE_FAILED",
+		respondError(c, serviceErrorStatus(err), "GET_MY_PROFILE_FAILED",
 			"获取我的主页失败", err.Error())
 		return
 	}
 
-	respondSuccess(c, map[string]any{"data": result}, "获取我的主页成功")
+	respondSuccess(c, result, "获取我的主页成功")
 }

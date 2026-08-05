@@ -10,9 +10,9 @@ import (
 
 // TestResolveFingerprintSeed 校验 seed 取值优先级：环境变量 > 会话文件 > 新生成并写回。
 func TestResolveFingerprintSeed(t *testing.T) {
-	newStore := func(t *testing.T) cookies.Cookier {
+	newStore := func(t *testing.T) cookies.CookieStore {
 		t.Helper()
-		return cookies.NewLoadCookie(filepath.Join(t.TempDir(), "cookies.json"))
+		return cookies.NewCookieStore(filepath.Join(t.TempDir(), "cookies.json"))
 	}
 
 	t.Run("环境变量优先于文件", func(t *testing.T) {

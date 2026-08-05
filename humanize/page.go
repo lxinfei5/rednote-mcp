@@ -14,7 +14,7 @@ func ownerPage(elem playwright.ElementHandle) (playwright.Page, error) {
 		return nil, err
 	}
 	if frame == nil {
-		return nil, errors.New("元素不属于任何 frame")
+		return nil, errors.New("element does not belong to a frame")
 	}
 	return frame.Page(), nil
 }

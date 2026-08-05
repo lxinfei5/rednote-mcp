@@ -44,7 +44,7 @@ func FingerprintSeedFromEnv() int {
 	}
 	seed, err := strconv.Atoi(s)
 	if err != nil || seed <= 0 {
-		logrus.Warnf("invalid XHS_FP_SEED=%q, ignored (fallback to random seed)", s)
+		logrus.Warnf("XHS_FP_SEED=%q 无效，已忽略并回退到随机 seed", s)
 		return 0
 	}
 	return seed

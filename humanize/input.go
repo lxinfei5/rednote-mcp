@@ -33,7 +33,7 @@ func elemRect(elem playwright.ElementHandle) (x, y, w, h float64, err error) {
 		return 0, 0, 0, 0, err
 	}
 	if box == nil || box.Width <= 0 || box.Height <= 0 {
-		return 0, 0, 0, 0, errors.New("元素无可点击区域")
+		return 0, 0, 0, 0, errors.New("element has no clickable area")
 	}
 	return box.X, box.Y, box.Width, box.Height, nil
 }
@@ -61,7 +61,7 @@ func ensurePointInViewport(page playwright.Page, pt Point) error {
 		return nil
 	}
 	if pt.X < 0 || pt.Y < 0 || pt.X > size[0] || pt.Y > size[1] {
-		return fmt.Errorf("落点 (%.0f,%.0f) 在视口 %.0fx%.0f 之外", pt.X, pt.Y, size[0], size[1])
+		return fmt.Errorf("point (%.0f, %.0f) is outside viewport %.0fx%.0f", pt.X, pt.Y, size[0], size[1])
 	}
 	return nil
 }
@@ -77,7 +77,7 @@ func ensureClickable(page playwright.Page, elem playwright.ElementHandle, pt Poi
 		return nil
 	}
 	if s, _ := res.(string); s == "hidden" {
-		return errors.New("元素当前不可命中")
+		return errors.New("element is not clickable")
 	}
 	return nil
 }
@@ -110,7 +110,7 @@ func Click(elem playwright.ElementHandle) error {
 	}
 
 	if ok, err := elem.IsEnabled(); err == nil && !ok {
-		return errors.New("元素不可用")
+		return errors.New("element is disabled")
 	}
 	return pressAndRelease(mouse)
 }
@@ -178,10 +178,10 @@ func Type(ctx context.Context, elem playwright.ElementHandle, text string) error
 		return err
 	}
 	if ok, err := elem.IsEnabled(); err == nil && !ok {
-		return errors.New("元素不可用")
+		return errors.New("element is disabled")
 	}
 	if ok, err := elem.IsEditable(); err == nil && !ok {
-		return errors.New("元素不可编辑")
+		return errors.New("element is not editable")
 	}
 
 	page, err := ownerPage(elem)

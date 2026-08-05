@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func Delay(ctx context.Context, action Action) {
+func Delay(ctx context.Context, action Action) error {
 	dist, ok := defaultProvider.Timing()[action]
 	if !ok {
 		dist = defaultProvider.Timing()[AfterClick]
@@ -16,6 +16,8 @@ func Delay(ctx context.Context, action Action) {
 
 	select {
 	case <-t.C:
+		return nil
 	case <-ctx.Done():
+		return ctx.Err()
 	}
 }

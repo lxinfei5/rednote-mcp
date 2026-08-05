@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/pkg/errors"
@@ -21,7 +22,7 @@ type sessionFile struct {
 // localCookiesPath 当前目录下的默认文件名。
 const localCookiesPath = "cookies.json"
 
-type Cookier interface {
+type CookieStore interface {
 	LoadCookies() ([]byte, error)
 	SaveCookies(data []byte) error
 	// LoadSeed 读取会话绑定的 seed；老格式、文件损坏或未设时返回 0。
@@ -30,23 +31,25 @@ type Cookier interface {
 	SaveSeed(seed int) error
 }
 
-type localCookie struct {
+type localCookieStore struct {
 	path string
 }
 
-func NewLoadCookie(path string) Cookier {
+// NewCookieStore 创建本地 Cookie 存储。
+func NewCookieStore(path string) CookieStore {
+	path = strings.TrimSpace(path)
 	if path == "" {
-		panic("path is required")
+		path = localCookiesPath
 	}
 
-	return &localCookie{
+	return &localCookieStore{
 		path: path,
 	}
 }
 
 // LoadCookies 从文件中加载 cookies 数组的原始字节。
 // v2 从外层对象里取出 cookies 字段；v1 文件本身就是数组，原样返回。
-func (c *localCookie) LoadCookies() ([]byte, error) {
+func (c *localCookieStore) LoadCookies() ([]byte, error) {
 
 	data, err := os.ReadFile(c.path)
 	if err != nil {
@@ -62,7 +65,7 @@ func (c *localCookie) LoadCookies() ([]byte, error) {
 }
 
 // LoadSeed 读取会话绑定的 seed。老格式（裸数组）没有这个值，返回 0。
-func (c *localCookie) LoadSeed() int {
+func (c *localCookieStore) LoadSeed() int {
 	data, err := os.ReadFile(c.path)
 	if err != nil {
 		return 0
@@ -76,12 +79,12 @@ func (c *localCookie) LoadSeed() int {
 }
 
 // SaveCookies 保存 cookies 到文件中，保留文件里已有的 seed。
-func (c *localCookie) SaveCookies(data []byte) error {
+func (c *localCookieStore) SaveCookies(data []byte) error {
 	return c.write(data, c.LoadSeed())
 }
 
 // SaveSeed 写入 seed，保留文件里已有的 cookies。
-func (c *localCookie) SaveSeed(seed int) error {
+func (c *localCookieStore) SaveSeed(seed int) error {
 	cks, err := c.LoadCookies()
 	if err != nil {
 		cks = nil // 文件还不存在：先把 seed 落下来，cookies 之后再补
@@ -90,7 +93,7 @@ func (c *localCookie) SaveSeed(seed int) error {
 }
 
 // write 以 v2 格式落盘。cookies 用 RawMessage 原样嵌入，不经过结构体往返。
-func (c *localCookie) write(cks []byte, seed int) error {
+func (c *localCookieStore) write(cks []byte, seed int) error {
 	if len(cks) == 0 {
 		cks = []byte("[]")
 	}

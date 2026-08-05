@@ -15,7 +15,7 @@ import (
 //
 // 契约由 routes.go 里一行 Stateless 支撑，丢掉它编译和其他单测都不会报错。
 func TestMCPStatelessSinglePost(t *testing.T) {
-	router := setupRoutes(NewAppServer(NewXiaohongshuService()))
+	router := setupRoutes(NewAppServer(NewXiaohongshuService(sharedBrowser), nil))
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -58,7 +58,7 @@ func TestMCPStatelessSinglePost(t *testing.T) {
 // 工具的注册各是 registerTools 里一段独立代码，漏掉任何一个编译都不会报错，
 // 只有真正调用时才会发现工具不存在；同时用精确集合防止写工具回流。
 func TestReadToolsRegistered(t *testing.T) {
-	router := setupRoutes(NewAppServer(NewXiaohongshuService()))
+	router := setupRoutes(NewAppServer(NewXiaohongshuService(sharedBrowser), nil))
 	server := httptest.NewServer(router)
 	defer server.Close()
 
@@ -106,7 +106,7 @@ func TestReadToolsRegistered(t *testing.T) {
 // 读路由表而不是发请求：这些 handler 会真的起浏览器访问小红书，
 // 单测里不能碰。
 func TestReadRoutesRegistered(t *testing.T) {
-	router := setupRoutes(NewAppServer(NewXiaohongshuService()))
+	router := setupRoutes(NewAppServer(NewXiaohongshuService(sharedBrowser), nil))
 
 	registered := make(map[string]bool)
 	for _, r := range router.Routes() {

@@ -44,15 +44,15 @@ func main() {
 
 	if !skipBin {
 		if err := installCamoufox(dest); err != nil {
-			logrus.Fatalf("install camoufox failed: %v", err)
+			logrus.Fatalf("安装 Camoufox 失败: %v", err)
 		}
 	}
 	if !skipDrv {
 		if err := installDriver(".playwright-driver"); err != nil {
-			logrus.Fatalf("install playwright driver failed: %v", err)
+			logrus.Fatalf("安装 playwright 驱动失败: %v", err)
 		}
 	}
-	logrus.Info("setup 完成")
+	logrus.Info("安装准备完成")
 }
 
 // installCamoufox 下载并校验固定版本的 Camoufox。

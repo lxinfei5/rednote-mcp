@@ -44,7 +44,7 @@ func ensureNode() error {
 		if mustExecutableFile(p) == nil {
 			return nil
 		}
-		return fmt.Errorf("PLAYWRIGHT_NODEJS_PATH not executable: %s", p)
+		return fmt.Errorf("PLAYWRIGHT_NODEJS_PATH is not executable: %s", p)
 	}
 
 	if dir := os.Getenv("PLAYWRIGHT_DRIVER_PATH"); dir != "" {

@@ -11,10 +11,10 @@
 | 启动服务并显示浏览器窗口 | `go run . -headless=false` |
 | 扫码登录（首次必做） | `go run ./cmd/login` |
 | 编译二进制 | `go build .` |
-| 格式化 | `gofmt -w .` |
+| 格式化 | `gofmt -w $(rg --files -g '*.go')` |
 | 运行测试 | `go test ./...` |
 
-MCP 端点为 `http://localhost:18060/mcp`。多数集成测试依赖真实浏览器与登录态，默认 `t.Skip`。
+MCP 端点为 `http://localhost:18060/mcp`。集成测试依赖真实浏览器与登录态，使用 `go test -tags integration ./xiaohongshu` 显式运行。
 
 **供应链约束**：服务运行时绝不自动下载浏览器或驱动。Camoufox 由 `cmd/camoufox-setup`
 固定版本、SHA-256 校验后落在 `bin/camoufox`（gitignored）；playwright 驱动（node +

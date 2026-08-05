@@ -43,7 +43,7 @@ func ResolveCamoufoxBin() (path string, source string, err error) {
 	if p := strings.TrimSpace(os.Getenv("XHS_CAMOUFOX_BIN")); p != "" {
 		bin, err := normalizeCamoufoxPath(p)
 		if err != nil {
-			return "", "", fmt.Errorf("XHS_CAMOUFOX_BIN: %w", err)
+			return "", "", fmt.Errorf("invalid XHS_CAMOUFOX_BIN: %w", err)
 		}
 		return bin, "env:XHS_CAMOUFOX_BIN", nil
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildCamouConfig_Deterministic(t *testing.T) {
+func TestBuildCamouConfigDeterministic(t *testing.T) {
 	a := buildCamouConfig(12345, "zh-CN")
 	b := buildCamouConfig(12345, "zh-CN")
 	ra, _ := json.Marshal(a)
@@ -23,13 +23,13 @@ func TestBuildCamouConfig_Deterministic(t *testing.T) {
 	assert.Contains(t, a["navigator.userAgent"], "Firefox/152")
 }
 
-func TestBuildCamouConfig_NoSeedOmitsKey(t *testing.T) {
+func TestBuildCamouConfigNoSeedOmitsKey(t *testing.T) {
 	cfg := buildCamouConfig(0, "zh-CN")
 	_, ok := cfg["seed"]
 	assert.False(t, ok, "seed<=0 不应写入配置")
 }
 
-func TestCamouEnv_ShortConfigSingleChunk(t *testing.T) {
+func TestCamouEnvShortConfigSingleChunk(t *testing.T) {
 	env, err := camouEnv(map[string]any{"a": "b"})
 	require.NoError(t, err)
 	require.Len(t, env, 1)
@@ -37,7 +37,7 @@ func TestCamouEnv_ShortConfigSingleChunk(t *testing.T) {
 	assert.JSONEq(t, `{"a":"b"}`, env["CAMOU_CONFIG_1"])
 }
 
-func TestCamouEnv_ChunksAndReassembles(t *testing.T) {
+func TestCamouEnvChunksAndReassembles(t *testing.T) {
 	// 构造一份超过单块大小的配置
 	big := strings.Repeat("x", camouConfigChunkSize*3+17)
 	env, err := camouEnv(map[string]any{"pad": big})

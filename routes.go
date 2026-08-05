@@ -43,7 +43,7 @@ func setupRoutes(appServer *AppServer) *gin.Engine {
 	api := router.Group("/api/v1")
 	{
 		api.GET("/login/status", appServer.checkLoginStatusHandler)
-		api.GET("/login/qrcode", appServer.getLoginQrcodeHandler)
+		api.GET("/login/qrcode", appServer.getLoginQRCodeHandler)
 		api.GET("/feeds/list", appServer.listFeedsHandler)
 		api.GET("/feeds/search", appServer.searchFeedsHandler)
 		api.POST("/feeds/search", appServer.searchFeedsHandler)

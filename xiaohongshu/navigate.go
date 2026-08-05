@@ -47,7 +47,9 @@ func (n *NavigateAction) ToProfilePage(ctx context.Context) error {
 	if err != nil || profileLink == nil {
 		return err
 	}
-	humanize.Delay(ctx, humanize.BeforeClick)
+	if err := humanize.Delay(ctx, humanize.BeforeClick); err != nil {
+		return err
+	}
 	if err := humanize.Click(profileLink); err != nil {
 		return err
 	}

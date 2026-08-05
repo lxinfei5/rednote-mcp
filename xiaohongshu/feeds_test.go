@@ -14,10 +14,12 @@ import (
 )
 
 func TestGetFeedsList(t *testing.T) {
-	b := browser.NewBrowser(false)
+	b, err := browser.NewBrowser(false)
+	require.NoError(t, err)
 	defer b.Close()
 
-	page := b.NewPage()
+	page, err := b.NewPage()
+	require.NoError(t, err)
 	defer page.Close()
 
 	action := NewFeedsListAction(page)

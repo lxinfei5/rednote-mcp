@@ -99,21 +99,21 @@ func NewBrowser(headless bool, options ...Option) (*Browser, error) {
 		height:          cfg.height,
 	}
 	if cfg.fingerprintSeed > 0 {
-		logrus.Infof("fingerprint seed pinned: %d", cfg.fingerprintSeed)
+		logrus.Infof("已固定指纹 seed: %d", cfg.fingerprintSeed)
 	}
 
 	if cfg.proxy != "" {
 		engineCfg.proxy = cfg.proxy
-		logrus.Infof("using proxy: %s", maskProxyCredentials(cfg.proxy))
+		logrus.Infof("使用代理: %s", maskProxyCredentials(cfg.proxy))
 	}
 
 	cookiePath := cookies.GetCookiesFilePath()
-	cookieLoader := cookies.NewLoadCookie(cookiePath)
+	cookieLoader := cookies.NewCookieStore(cookiePath)
 	if data, err := cookieLoader.LoadCookies(); err == nil {
 		engineCfg.cookies = string(data)
-		logrus.Debugf("loaded cookies from file successfully")
+		logrus.Debugf("已成功从文件加载 cookies")
 	} else {
-		logrus.Warnf("failed to load cookies: %v", err)
+		logrus.Warnf("加载 cookies 失败: %v", err)
 	}
 
 	return newBrowser(engineCfg)

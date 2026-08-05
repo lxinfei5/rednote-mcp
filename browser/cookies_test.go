@@ -13,7 +13,7 @@ import (
 // cookies.json 线上是 v2 信封格式 {version,seed,cookies:[...]}，必须能解出内层数组。
 // 真实 CDP 导出里 partitionKey 是对象、sourcePort 形态不一，
 // 这些字段必须原样透传而不让整份数组反序列化失败（线上 cookies.json 即如此）。
-func TestCookiesToOptional_PartitionKeyObject(t *testing.T) {
+func TestCookiesToOptionalPartitionKeyObject(t *testing.T) {
 	raw := `[
 		{"name":"abRequestId","value":"v","domain":".xiaohongshu.com","path":"/","expires":1814856565.328461,"secure":false,"sourcePort":80,"sourceScheme":"NonSecure"},
 		{"name":"web_session","value":"abc","domain":".xiaohongshu.com","path":"/","expires":1815245084.024262,"secure":true,"httpOnly":true,"sameSite":"None","partitionKey":{"topLevelSite":"https://xiaohongshu.com"},"sourcePort":443}
@@ -25,7 +25,7 @@ func TestCookiesToOptional_PartitionKeyObject(t *testing.T) {
 	assert.Equal(t, playwright.SameSiteAttributeNone, ocs[1].SameSite)
 }
 
-func TestCookiesToOptional_V2Envelope(t *testing.T) {
+func TestCookiesToOptionalV2Envelope(t *testing.T) {
 	v2 := `{
 		"version": 2,
 		"seed": 20260805,
@@ -45,7 +45,7 @@ func TestCookiesToOptional_V2Envelope(t *testing.T) {
 	assert.True(t, *ocs[1].Secure)
 }
 
-func TestCookiesToOptional_CDPLegacy(t *testing.T) {
+func TestCookiesToOptionalCDPLegacy(t *testing.T) {
 	cdp := `[
 		{
 			"name": "web_session",
@@ -81,7 +81,7 @@ func TestCookiesToOptional_CDPLegacy(t *testing.T) {
 	assert.Equal(t, playwright.SameSiteAttributeLax, c.SameSite)
 }
 
-func TestCookiesToOptional_SameSiteVariants(t *testing.T) {
+func TestCookiesToOptionalSameSiteVariants(t *testing.T) {
 	cases := map[string]*playwright.SameSiteAttribute{
 		"Strict":  playwright.SameSiteAttributeStrict,
 		"strict":  playwright.SameSiteAttributeStrict,
@@ -97,7 +97,7 @@ func TestCookiesToOptional_SameSiteVariants(t *testing.T) {
 	}
 }
 
-func TestCookiesToOptional_SkipsNamelessAndGarbage(t *testing.T) {
+func TestCookiesToOptionalSkipsNamelessAndGarbage(t *testing.T) {
 	assert.Nil(t, cookiesToOptional([]byte("not json")))
 	assert.Empty(t, cookiesToOptional([]byte(`[{"value":"x"}]`))) // 无 name 跳过
 }

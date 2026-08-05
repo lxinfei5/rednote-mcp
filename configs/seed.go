@@ -16,7 +16,7 @@ const maxSeed = 1 << 31
 //
 // 环境变量必须排第一：已经用它钉死画像的部署，不能被文件里的值顶掉。
 // 生成后一定要写回，否则每次启动都是新的一套，等于没固定。
-func ResolveFingerprintSeed(store cookies.Cookier) int {
+func ResolveFingerprintSeed(store cookies.CookieStore) int {
 	if seed := FingerprintSeedFromEnv(); seed > 0 {
 		return seed
 	}

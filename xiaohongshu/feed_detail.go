@@ -36,10 +36,10 @@ const (
 // ========== 数据结构 ==========
 
 type CommentLoadConfig struct {
-	ClickMoreReplies    bool
-	MaxRepliesThreshold int
-	MaxCommentItems     int
-	ScrollSpeed         string
+	ClickMoreReplies    bool   `json:"click_more_replies,omitempty"`
+	MaxRepliesThreshold int    `json:"max_replies_threshold,omitempty"`
+	MaxCommentItems     int    `json:"max_comment_items,omitempty"`
+	ScrollSpeed         string `json:"scroll_speed,omitempty"`
 }
 
 const (
@@ -81,10 +81,6 @@ func NewFeedDetailAction(page playwright.Page) *FeedDetailAction {
 
 // ========== 主要业务逻辑 ==========
 
-func (f *FeedDetailAction) GetFeedDetail(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
-	return f.GetFeedDetailWithConfig(ctx, feedID, xsecToken, loadAllComments, config)
-}
-
 func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, xsecToken string, loadAllComments bool, config CommentLoadConfig) (*FeedDetailResponse, error) {
 	config = config.normalize()
 
@@ -119,7 +115,9 @@ func (f *FeedDetailAction) GetFeedDetailWithConfig(ctx context.Context, feedID, 
 		logrus.Errorf("页面导航失败: %v", err)
 		return nil, err
 	}
-	humanize.Delay(ctx, humanize.AfterNavigate)
+	if err := humanize.Delay(ctx, humanize.AfterNavigate); err != nil {
+		return nil, err
+	}
 
 	if err := checkPageAccessible(page); err != nil {
 		return nil, err
@@ -174,7 +172,9 @@ func (cl *commentLoader) load(ctx context.Context) error {
 
 	logrus.Info("开始加载评论...")
 	scrollToCommentsArea(cl.page)
-	humanize.Delay(ctx, humanize.BetweenScroll)
+	if err := humanize.Delay(ctx, humanize.BetweenScroll); err != nil {
+		return err
+	}
 
 	if cl.checkNoComments() {
 		return nil
@@ -188,12 +188,19 @@ func (cl *commentLoader) load(ctx context.Context) error {
 
 		logrus.Debugf("=== 尝试 %d/%d ===", cl.stats.attempts+1, maxAttempts)
 
-		if cl.checkComplete(ctx) {
+		complete, err := cl.checkComplete(ctx)
+		if err != nil {
+			return err
+		}
+		if complete {
 			return nil
 		}
 
 		if cl.shouldClickButtons() {
 			cl.clickButtonsWithRetry(ctx)
+		}
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 
 		currentCount := getCommentCount(cl.page)
@@ -205,12 +212,17 @@ func (cl *commentLoader) load(ctx context.Context) error {
 
 		cl.performScroll(ctx)
 		cl.handleStagnation(ctx)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 
-		humanize.Delay(ctx, humanize.BetweenScroll)
+		if err := humanize.Delay(ctx, humanize.BetweenScroll); err != nil {
+			return err
+		}
 	}
 
 	cl.performFinalSprint(ctx)
-	return nil
+	return ctx.Err()
 }
 
 func (cl *commentLoader) calculateMaxAttempts() int {
@@ -228,22 +240,24 @@ func (cl *commentLoader) checkNoComments() bool {
 	return false
 }
 
-func (cl *commentLoader) checkComplete(ctx context.Context) bool {
+func (cl *commentLoader) checkComplete(ctx context.Context) (bool, error) {
 	if !checkEndContainer(cl.page) {
-		return false
+		return false, nil
 	}
 
 	// 到底之后再展开一轮：点开就先不算完，让下一轮重新判断
 	if cl.config.ClickMoreReplies && cl.clickButtonsWithRetry(ctx) > 0 {
-		return false
+		return false, ctx.Err()
 	}
 
 	currentCount := getCommentCount(cl.page)
 	logrus.Infof("✓ 检测到 'THE END' 元素，已滑动到底部")
-	humanize.Delay(ctx, humanize.BetweenScroll)
+	if err := humanize.Delay(ctx, humanize.BetweenScroll); err != nil {
+		return false, err
+	}
 	logrus.Infof("✓ 加载完成: %d 条评论, 尝试次数: %d, 点击: %d, 跳过: %d",
 		currentCount, cl.stats.attempts+1, cl.stats.totalClicked, cl.stats.totalSkipped)
-	return true
+	return true, nil
 }
 
 func (cl *commentLoader) shouldClickButtons() bool {
@@ -261,14 +275,18 @@ func (cl *commentLoader) clickButtonsWithRetry(ctx context.Context) int {
 	logrus.Infof("点击'更多': %d 个, 跳过: %d 个, 累计点击: %d, 累计跳过: %d",
 		clicked, skipped, cl.stats.totalClicked, cl.stats.totalSkipped)
 
-	humanize.Delay(ctx, humanize.Reading)
+	if err := humanize.Delay(ctx, humanize.Reading); err != nil {
+		return clicked
+	}
 
 	clicked2, skipped2 := clickShowMoreButtonsSmart(ctx, cl.page, cl.config.MaxRepliesThreshold)
 	if clicked2 > 0 || skipped2 > 0 {
 		cl.stats.totalClicked += clicked2
 		cl.stats.totalSkipped += skipped2
 		logrus.Infof("第 2 轮: 点击 %d, 跳过 %d", clicked2, skipped2)
-		humanize.Delay(ctx, humanize.Reading)
+		if err := humanize.Delay(ctx, humanize.Reading); err != nil {
+			return clicked + clicked2
+		}
 	}
 
 	return clicked + clicked2
@@ -506,11 +524,15 @@ func clickElementWithHumanBehavior(ctx context.Context, page playwright.Page, el
 			if err := el.ScrollIntoViewIfNeeded(); err != nil {
 				return err
 			}
-			humanize.Delay(ctx, humanize.Reading)
+			if err := humanize.Delay(ctx, humanize.Reading); err != nil {
+				return err
+			}
 			if err := humanize.Click(el); err != nil {
 				return err
 			}
-			humanize.Delay(ctx, humanize.Reading)
+			if err := humanize.Delay(ctx, humanize.Reading); err != nil {
+				return err
+			}
 			clickSuccess = true
 			return nil
 		},
@@ -564,7 +586,9 @@ func humanScroll(ctx context.Context, page playwright.Page, speed string, largeM
 		beforeTop = currentScrollTop
 
 		if i < pushCount-1 {
-			humanize.Delay(ctx, humanize.BetweenScroll)
+			if err := humanize.Delay(ctx, humanize.BetweenScroll); err != nil {
+				return scrolled, actualDelta, currentScrollTop
+			}
 		}
 	}
 
@@ -800,14 +824,14 @@ func checkPageAccessible(page playwright.Page) error {
 	for _, kw := range keywords {
 		if strings.Contains(text, kw) {
 			logrus.Warnf("笔记不可访问: %s", kw)
-			return fmt.Errorf("笔记不可访问: %s", kw)
+			return fmt.Errorf("note is not accessible: %s", kw)
 		}
 	}
 
 	trimmedText := strings.TrimSpace(text)
 	if trimmedText != "" {
 		logrus.Warnf("笔记不可访问（未知原因）: %s", trimmedText)
-		return fmt.Errorf("笔记不可访问: %s", trimmedText)
+		return fmt.Errorf("note is not accessible: %s", trimmedText)
 	}
 
 	return nil
@@ -833,7 +857,7 @@ func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, feedID string
 				result = evalResult
 				return nil
 			}
-			return fmt.Errorf("无法获取初始状态数据")
+			return fmt.Errorf("initial state data not found")
 		},
 		retry.Attempts(3),
 		retry.Delay(200*time.Millisecond),
@@ -845,7 +869,7 @@ func (f *FeedDetailAction) extractFeedDetail(page playwright.Page, feedID string
 
 	if err != nil {
 		logrus.Errorf("提取Feed详情失败: %v", err)
-		return nil, fmt.Errorf("提取Feed详情失败: %w", err)
+		return nil, fmt.Errorf("extract feed detail failed: %w", err)
 	}
 
 	if result == "" {

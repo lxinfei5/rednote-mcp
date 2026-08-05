@@ -15,20 +15,20 @@ import (
 func main() {
 	flag.Parse()
 
-	store := cookies.NewLoadCookie(cookies.GetCookiesFilePath())
+	store := cookies.NewCookieStore(cookies.GetCookiesFilePath())
 
 	b, err := browser.NewBrowser(false,
 		browser.WithFingerprintSeed(configs.ResolveFingerprintSeed(store)),
 		browser.WithProxy(configs.ProxyFromEnv()),
 	)
 	if err != nil {
-		logrus.Fatalf("start camoufox failed: %v", err)
+		logrus.Fatalf("启动 Camoufox 失败: %v", err)
 	}
 	defer b.Close()
 
 	page, err := b.NewPage()
 	if err != nil {
-		logrus.Fatalf("new page failed: %v", err)
+		logrus.Fatalf("新建页面失败: %v", err)
 	}
 	defer page.Close()
 
@@ -36,7 +36,7 @@ func main() {
 
 	status, err := action.CheckLoginStatus(context.Background())
 	if err != nil {
-		logrus.Fatalf("failed to check login status: %v", err)
+		logrus.Fatalf("检查登录状态失败: %v", err)
 	}
 	logrus.Infof("当前登录状态: %v", status)
 	if status {
@@ -51,16 +51,16 @@ func main() {
 	// 登录成功，导出 cookie 落盘
 	data, err := b.Cookies()
 	if err != nil {
-		logrus.Fatalf("read cookies failed: %v", err)
+		logrus.Fatalf("读取 cookies 失败: %v", err)
 	}
 	if err := store.SaveCookies(data); err != nil {
-		logrus.Fatalf("failed to save cookies: %v", err)
+		logrus.Fatalf("保存 cookies 失败: %v", err)
 	}
 
 	// 再次确认登录状态
 	status, err = action.CheckLoginStatus(context.Background())
 	if err != nil {
-		logrus.Fatalf("failed to check login status after login: %v", err)
+		logrus.Fatalf("登录后检查登录状态失败: %v", err)
 	}
 	if status {
 		logrus.Info("登录成功！")

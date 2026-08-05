@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNormalizeCamoufoxPath_AppBundle(t *testing.T) {
+func TestNormalizeCamoufoxPathAppBundle(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip(".app 布局仅在 macOS 解析")
 	}
@@ -35,7 +35,7 @@ func TestNormalizeCamoufoxPath_AppBundle(t *testing.T) {
 	assert.Equal(t, exe, got)
 }
 
-func TestNormalizeCamoufoxPath_RejectsGarbage(t *testing.T) {
+func TestNormalizeCamoufoxPathRejectsGarbage(t *testing.T) {
 	dir := t.TempDir()
 	_, err := normalizeCamoufoxPath(filepath.Join(dir, "nonexistent"))
 	assert.Error(t, err)
@@ -46,7 +46,7 @@ func TestNormalizeCamoufoxPath_RejectsGarbage(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestCamoufoxExeInDir_NotExecutable(t *testing.T) {
+func TestCamoufoxExeInDirNotExecutable(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("windows 不校验可执行位")
 	}

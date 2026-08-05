@@ -32,12 +32,12 @@ func TestIsExpandRepliesButton(t *testing.T) {
 	}
 }
 
-// TestCommentLoadConfig_normalize 零值一律按「未设置」处理，回落到默认上限。
+// TestCommentLoadConfigNormalize 零值一律按「未设置」处理，回落到默认上限。
 //
 // 回归的是这个坑：HTTP 详情接口要的是嵌套的 comment_config，调用方传扁平字段
 // 会被 ShouldBindJSON 静默丢掉 → MaxCommentItems=0 → 以前 0 表示无上限 →
 // 一次请求滚满 defaultMaxAttempts(500) 轮。
-func TestCommentLoadConfig_normalize(t *testing.T) {
+func TestCommentLoadConfigNormalize(t *testing.T) {
 	t.Run("空配置回落到默认", func(t *testing.T) {
 		got := CommentLoadConfig{}.normalize()
 		assert.Equal(t, defaultMaxCommentItems, got.MaxCommentItems)

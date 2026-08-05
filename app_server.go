@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,16 +16,22 @@ import (
 
 // AppServer 应用服务器结构体，封装所有服务和处理器
 type AppServer struct {
-	xiaohongshuService *XiaohongshuService
+	xiaohongshuService ReadService
 	mcpServer          *mcp.Server
 	router             *gin.Engine
 	httpServer         *http.Server
+	closeResources     func()
 }
 
 // NewAppServer 创建新的应用服务器实例
-func NewAppServer(xiaohongshuService *XiaohongshuService) *AppServer {
+func NewAppServer(xiaohongshuService ReadService, closeResources func()) *AppServer {
+	if closeResources == nil {
+		closeResources = func() {}
+	}
+
 	appServer := &AppServer{
 		xiaohongshuService: xiaohongshuService,
+		closeResources:     closeResources,
 	}
 
 	// 初始化 MCP Server（需要在创建 appServer 之后，因为工具注册需要访问 appServer）
@@ -35,6 +42,8 @@ func NewAppServer(xiaohongshuService *XiaohongshuService) *AppServer {
 
 // Start 启动服务器
 func (s *AppServer) Start(port string) error {
+	defer s.closeResources()
+
 	s.router = setupRoutes(s)
 
 	s.httpServer = &http.Server{
@@ -42,19 +51,24 @@ func (s *AppServer) Start(port string) error {
 		Handler: s.router,
 	}
 
-	// 启动服务器的 goroutine
+	serverErr := make(chan error, 1)
 	go func() {
 		logrus.Infof("启动 HTTP 服务器: %s", port)
 		if err := s.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logrus.Errorf("服务器启动失败: %v", err)
-			os.Exit(1)
+			serverErr <- err
 		}
 	}()
 
 	// 等待中断信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	defer signal.Stop(quit)
+
+	select {
+	case err := <-serverErr:
+		return fmt.Errorf("http server failed: %w", err)
+	case <-quit:
+	}
 
 	logrus.Infof("正在关闭服务器...")
 
@@ -63,12 +77,10 @@ func (s *AppServer) Start(port string) error {
 
 	if err := s.httpServer.Shutdown(ctx); err != nil {
 		logrus.Warnf("等待连接关闭超时，强制退出: %v", err)
+		return fmt.Errorf("shutdown http server failed: %w", err)
 	} else {
 		logrus.Infof("服务器已优雅关闭")
 	}
-
-	// 关闭常驻浏览器，避免遗留 Chrome 子进程
-	sharedBrowser.Close()
 
 	return nil
 }
