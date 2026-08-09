@@ -63,21 +63,37 @@ func (u *UserProfileAction) UserProfile(ctx context.Context, userID, xsecToken s
 
 // extractUserProfileData 从页面中提取用户资料数据的通用方法
 func (u *UserProfileAction) extractUserProfileData(page playwright.Page, tab ProfileTab) (*UserProfileResponse, error) {
-	if _, err := page.WaitForFunction(`() => window.__INITIAL_STATE__ !== undefined`, nil,
-		playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(60_000)}); err != nil {
-		return nil, fmt.Errorf("wait for page state failed: %w", err)
+	// 等个人主页资料就绪：userPageData 需已带 basicInfo。
+	// 侧边栏点击进入时它是 Vue ref（__v_isRef），值先空壳后填充，直接读会拿到空数据。
+	if _, err := page.WaitForFunction(`() => {
+		const u = window.__INITIAL_STATE__ && window.__INITIAL_STATE__.user;
+		if (!u) return false;
+		const unwrap = (o) => {
+			if (o == null) return null;
+			if (o.__v_isRef) return o._value !== undefined ? o._value : o.value;
+			if (o.value !== undefined) return o.value;
+			if (o._value !== undefined) return o._value;
+			return o;
+		};
+		const data = unwrap(u.userPageData);
+		const basic = data && data.basicInfo;
+		return !!(basic && basic.nickname);
+	}`, nil, playwright.PageWaitForFunctionOptions{Timeout: playwright.Float(60_000)}); err != nil {
+		return nil, fmt.Errorf("wait for user profile data failed: %w", err)
 	}
 
 	userDataResult := evalString(page, `() => {
-		if (window.__INITIAL_STATE__ &&
-		    window.__INITIAL_STATE__.user &&
-		    window.__INITIAL_STATE__.user.userPageData) {
-			const userPageData = window.__INITIAL_STATE__.user.userPageData;
-			const data = userPageData.value !== undefined ? userPageData.value : userPageData._value;
-			if (data) {
-				return JSON.stringify(data);
-			}
-		}
+		const u = window.__INITIAL_STATE__ && window.__INITIAL_STATE__.user;
+		if (!u || !u.userPageData) return "";
+		const unwrap = (o) => {
+			if (o == null) return null;
+			if (o.__v_isRef) return o._value !== undefined ? o._value : o.value;
+			if (o.value !== undefined) return o.value;
+			if (o._value !== undefined) return o._value;
+			return o;
+		};
+		const data = unwrap(u.userPageData);
+		if (data && data.basicInfo) return JSON.stringify(data);
 		return "";
 	}`)
 	if userDataResult == "" {
