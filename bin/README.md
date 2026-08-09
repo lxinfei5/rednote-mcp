@@ -24,6 +24,8 @@ go run ./cmd/camoufox-setup
 
 ## 启动 / 停止
 
+### macOS / Linux
+
 ```bash
 # 在任意 cwd 均可（脚本会 cd 到项目根）
 /path/to/rednote-mcp/bin/xhs-mcp-daemon.sh start
@@ -32,11 +34,28 @@ go run ./cmd/camoufox-setup
 /path/to/rednote-mcp/bin/xhs-mcp-daemon.sh health
 ```
 
+### Windows（推荐）
+
+```powershell
+# 在任意 cwd 均可；需已编译 bin\xhs-mcp.exe（或设 XHS_MCP_BIN）
+.\bin\xhs-mcp-daemon.ps1 start
+.\bin\xhs-mcp-daemon.ps1 stop
+.\bin\xhs-mcp-daemon.ps1 status
+.\bin\xhs-mcp-daemon.ps1 health
+
+# 登录时自动拉起（当前用户计划任务，关终端/重启后仍在）
+.\bin\xhs-mcp-daemon.ps1 install-autostart
+.\bin\xhs-mcp-daemon.ps1 uninstall-autostart
+```
+
+若执行策略拦截，可：`powershell -ExecutionPolicy Bypass -File .\bin\xhs-mcp-daemon.ps1 start`
+
 - 监听：`127.0.0.1:18060`（MCP：`http://localhost:18060/mcp`）
-- 启动参数：`-headless=false -port 127.0.0.1:18060`
+- 启动参数：`-headless=true -port 127.0.0.1:18060`（服务态默认无头；`XHS_HEADLESS=false` 可临时有头调试）
 - **cwd 固定为本仓根**（`cookies.json` 相对路径）
-- pid/log：默认 `~/.xiaohongshu-mcp/{pids,logs}/`（不进 git）
+- pid/log：默认 `~/.xiaohongshu-mcp/{pids,logs}/`（Windows 为 `%USERPROFILE%\.xiaohongshu-mcp\`，不进 git）
 - 可选 env：
+  - `XHS_MCP_BIN`（二进制路径；Windows 默认 `bin\xhs-mcp.exe`）
   - `XHS_CAMOUFOX_BIN`、`PLAYWRIGHT_DRIVER_PATH`、`PLAYWRIGHT_NODEJS_PATH`（见上）
   - `XHS_FP_SEED`（固定指纹 seed，缺省取 cookies.json 里的 seed）、`XHS_PROXY`、`COOKIES_PATH`
   - `XHS_RISK_STREAK_LIMIT`（墙信号熔断，默认 3，0=关）
