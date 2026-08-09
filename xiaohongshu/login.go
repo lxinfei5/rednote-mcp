@@ -101,15 +101,19 @@ func (a *LoginAction) FetchQRCodeImage(ctx context.Context) (string, bool, error
 		return "", false, errors.Wrap(err, "navigate to explore failed")
 	}
 
-	time.Sleep(2 * time.Second)
-
+	// 等页面稳定后先查登录态；已登录直接返回
+	time.Sleep(1 * time.Second)
 	if el, _ := a.page.QuerySelector(loginChannelSelector); el != nil {
 		return "", true, nil
 	}
 
-	qr, err := a.page.QuerySelector(".login-container .qrcode-img")
-	if err != nil || qr == nil {
-		return "", false, errors.New("qrcode image element not found")
+	// 登录弹窗是异步渲染的，等待二维码元素出现（而非固定 sleep 后查询，避免竞态）
+	qr, err := a.page.WaitForSelector(".login-container .qrcode-img", playwright.PageWaitForSelectorOptions{
+		State:   playwright.WaitForSelectorStateVisible,
+		Timeout: playwright.Float(15_000),
+	})
+	if err != nil {
+		return "", false, errors.Wrap(err, "login qrcode element not found")
 	}
 	src, err := qr.GetAttribute("src")
 	if err != nil {
