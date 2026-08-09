@@ -9,6 +9,7 @@
 package main
 
 import (
+	"archive/zip"
 	"crypto/sha256"
 	"encoding/hex"
 	"flag"
@@ -19,6 +20,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 	"github.com/xpzouying/xiaohongshu-mcp/browser"
@@ -111,26 +113,85 @@ func installDriver(dir string) error {
 
 	// node：优先复用系统 node；否则提示用户安装（不自动下载 node 二进制，
 	// 因为它同样需要单独的可信校验链）。
-	nodePath, err := exec.LookPath("node")
+	nodePath, err := resolveNodePath()
 	if err != nil {
-		return fmt.Errorf("node not found in PATH; install node or set PLAYWRIGHT_NODEJS_PATH")
+		return err
 	}
 	logrus.Infof("使用 node: %s", nodePath)
 
 	// playwright-core：经 npm 安装固定版本，npm 自带 integrity 校验。
 	logrus.Infof("安装 playwright-core@%s", playwrightCoreVersion)
-	npm, err := exec.LookPath("npm")
+	npm, err := resolveNPMPath(nodePath)
 	if err != nil {
-		return fmt.Errorf("npm not found; install node/npm or stage playwright-core manually")
+		return err
 	}
 	cmd := exec.Command(npm, "install", "--prefix", filepath.Join(dir, "package"),
 		"--no-save", "--no-audit", "--no-fund", "playwright-core@"+playwrightCoreVersion)
+	cmd.Env = withPathPrefix(filepath.Dir(nodePath))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("npm install playwright-core failed: %w", err)
 	}
 	logrus.Infof("playwright 驱动已就绪: %s", dir)
 	return nil
+}
+
+func resolveNodePath() (string, error) {
+	if p := strings.TrimSpace(os.Getenv("PLAYWRIGHT_NODEJS_PATH")); p != "" {
+		if err := mustFile(p); err != nil {
+			return "", fmt.Errorf("PLAYWRIGHT_NODEJS_PATH is not a node executable: %w", err)
+		}
+		return p, nil
+	}
+	p, err := exec.LookPath("node")
+	if err != nil {
+		return "", fmt.Errorf("node not found in PATH; install node or set PLAYWRIGHT_NODEJS_PATH")
+	}
+	return p, nil
+}
+
+func resolveNPMPath(nodePath string) (string, error) {
+	if p := strings.TrimSpace(os.Getenv("PLAYWRIGHT_NPM_PATH")); p != "" {
+		if err := mustFile(p); err != nil {
+			return "", fmt.Errorf("PLAYWRIGHT_NPM_PATH is not an npm executable: %w", err)
+		}
+		return p, nil
+	}
+	if runtime.GOOS == "windows" {
+		for _, name := range []string{"npm.cmd", "npm.exe", "npm"} {
+			p := filepath.Join(filepath.Dir(nodePath), name)
+			if mustFile(p) == nil {
+				return p, nil
+			}
+		}
+	}
+	p, err := exec.LookPath("npm")
+	if err != nil {
+		return "", fmt.Errorf("npm not found; install node/npm, set PLAYWRIGHT_NPM_PATH, or stage playwright-core manually")
+	}
+	return p, nil
+}
+
+func mustFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("path is a directory: %s", path)
+	}
+	return nil
+}
+
+func withPathPrefix(prefix string) []string {
+	env := os.Environ()
+	for i, item := range env {
+		if strings.HasPrefix(strings.ToUpper(item), "PATH=") {
+			env[i] = "PATH=" + prefix + string(os.PathListSeparator) + item[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+prefix)
 }
 
 func download(url string, w io.Writer) error {
@@ -159,9 +220,57 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-// unzip 用系统 unzip 解压（macOS/Linux 均有），避免引入额外依赖。
+// unzip 使用标准库解压，避免 Windows 依赖 Unix unzip 命令。
 func unzip(zipPath, dest string) error {
-	cmd := exec.Command("unzip", "-q", "-o", zipPath, "-d", dest)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	return cmd.Run()
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	root, err := filepath.Abs(dest)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range r.File {
+		name := filepath.Clean(filepath.FromSlash(entry.Name))
+		if name == "." || filepath.IsAbs(name) || name == ".." || strings.HasPrefix(name, ".."+string(os.PathSeparator)) {
+			return fmt.Errorf("unsafe zip entry: %s", entry.Name)
+		}
+		target := filepath.Join(root, name)
+		if entry.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		in, err := entry.Open()
+		if err != nil {
+			return err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o755)
+		if err != nil {
+			_ = in.Close()
+			return err
+		}
+		_, err = io.Copy(out, in)
+		closeOutErr := out.Close()
+		closeInErr := in.Close()
+		if err != nil {
+			return err
+		}
+		if closeOutErr != nil {
+			return closeOutErr
+		}
+		if closeInErr != nil {
+			return closeInErr
+		}
+	}
+	return nil
 }
