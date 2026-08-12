@@ -20,6 +20,12 @@ func NewLogin(page playwright.Page) *LoginAction {
 // loginChannelSelector 登录后侧边栏「我」频道的标识元素。
 const loginChannelSelector = `.main-container .user .link-wrapper .channel`
 
+// loginDialogSelector 未登录时 explore 页会渲染的登录弹窗。
+const loginDialogSelector = `.login-container`
+
+// exploreRootSelector 登录态和未登录态都会渲染的应用根节点。
+const exploreRootSelector = `#app`
+
 func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 	if _, err := a.page.Goto("https://www.xiaohongshu.com/explore", playwright.PageGotoOptions{
 		WaitUntil: playwright.WaitUntilStateLoad,
@@ -28,16 +34,43 @@ func (a *LoginAction) CheckLoginStatus(ctx context.Context) (bool, error) {
 		return false, errors.Wrap(err, "check login status navigate failed")
 	}
 
-	time.Sleep(1 * time.Second)
+	// Goto(load) 只代表文档加载完成，登录弹窗和侧边栏都由 SPA 异步挂载。
+	// 先等应用根节点，再在有限窗口内等待二者之一出现，避免把正常的未登录态报成 500。
+	if _, err := a.page.WaitForSelector(exploreRootSelector, playwright.PageWaitForSelectorOptions{
+		State:   playwright.WaitForSelectorStateAttached,
+		Timeout: playwright.Float(15_000),
+	}); err != nil {
+		return false, errors.Wrap(err, "check login status page not ready")
+	}
 
-	el, err := a.page.QuerySelector(loginChannelSelector)
-	if err != nil {
-		return false, errors.Wrap(err, "check login status failed")
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		loggedIn, err := a.page.QuerySelector(loginChannelSelector)
+		if err != nil {
+			return false, errors.Wrap(err, "check login status failed")
+		}
+		if loggedIn != nil {
+			return true, nil
+		}
+
+		loggedOut, err := a.page.QuerySelector(loginDialogSelector)
+		if err != nil {
+			return false, errors.Wrap(err, "check login status failed")
+		}
+		if loggedOut != nil {
+			return false, nil
+		}
+
+		if time.Now().After(deadline) {
+			return false, errors.New("login status markers not found")
+		}
+
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		case <-time.After(250 * time.Millisecond):
+		}
 	}
-	if el == nil {
-		return false, errors.New("login status element not found")
-	}
-	return true, nil
 }
 
 // CurrentUser 当前登录用户的基础信息。
